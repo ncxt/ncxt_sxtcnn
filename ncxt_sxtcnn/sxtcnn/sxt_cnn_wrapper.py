@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
-import volumeblocks
+from .. import volumeblocks
 from scipy.signal.windows import triang
 from sklearn.metrics import confusion_matrix
 from torch import optim

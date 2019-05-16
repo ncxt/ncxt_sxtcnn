@@ -15,3 +15,6 @@
 # weights for cnn's
 *.weights
 
+# temp wd
+**/__tempwd__/
+

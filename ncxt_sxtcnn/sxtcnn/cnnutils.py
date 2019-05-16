@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-import volumeblocks
+from .. import volumeblocks
 from scipy.signal.windows import triang
 from sklearn.metrics import confusion_matrix
 import itertools

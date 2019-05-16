@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 
 import numpy as np
-import volumeblocks
+from .. import volumeblocks
 from scipy.signal.windows import triang
 
 from .utils import ensure_dir
@@ -394,6 +394,7 @@ class RandomBlockProcessor(DataProcessor):
             test_idx=None,
             split=None,
             n_samples=None,
+            n_blocks=1,
             random_seed=None,
             reset=False,
     ):
@@ -429,14 +430,14 @@ class RandomBlockProcessor(DataProcessor):
             blocks_x = volumeblocks.random_blocks(
                 data,
                 block_shape_big,
-                max_patches=self.n_blocks,
+                max_patches=n_blocks,
                 binning=self.binning,
                 random_state=seed)
 
             blocks_y = volumeblocks.random_blocks_label(
                 labels,
                 block_shape_big,
-                max_patches=self.n_blocks,
+                max_patches=n_blocks,
                 binning=self.binning,
                 random_state=seed)
 
