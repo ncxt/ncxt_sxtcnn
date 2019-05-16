@@ -6,8 +6,9 @@ from scipy.ndimage import gaussian_filter1d
 from scipy.optimize import curve_fit
 from scipy.signal import argrelextrema
 
+from .. import io
+
 from .models import UNet3D
-from .read_write_mrc import read_mrc
 from .utils import bin_ndarray_mode, bin_ndarray_single, crop_to_nonzero
 
 
@@ -40,11 +41,8 @@ def feature_selector(image, keydict, features, cellmask=True):
 
     ignore_mask = np.isin(image, ignore_labels).astype(int)
     retval_key = {"exterior": 0}
-    label = (
-        np.isin(image, cell_labels).astype(int)
-        if cellmask
-        else np.zeros(image.shape, dtype=int)
-    )
+    label = (np.isin(image, cell_labels).astype(int)
+             if cellmask else np.zeros(image.shape, dtype=int))
     if cellmask:
         retval_key["cell"] = 1
 
@@ -86,10 +84,10 @@ class NCXTMockLoader:
         return self.lenght
 
     def __getitem__(self, index):
-        key = {f'material_{n}':n for n in range(self.labels) }
-        random_lac = np.random.random(self.shape) 
-        random_label = np.random.randint(low=0, high=self.labels,
-                                        size=self.shape, dtype='int')
+        key = {f'material_{n}': n for n in range(self.labels)}
+        random_lac = np.random.random(self.shape)
+        random_label = np.random.randint(
+            low=0, high=self.labels, size=self.shape, dtype='int')
 
         return {
             "input": random_lac.reshape(1, *random_lac.shape),
@@ -99,11 +97,16 @@ class NCXTMockLoader:
 
 
 class NCXTDBLoader:
-    def __init__(
-        self, db, features, cellmask=True, binning=None, norm=None, mask=None, crop=None
-    ):
-        assert isinstance(features, (list, tuple)
-                          ), "features must be a list or a tuple"
+    def __init__(self,
+                 db,
+                 features,
+                 cellmask=True,
+                 binning=None,
+                 norm=None,
+                 mask=None,
+                 crop=None):
+        assert isinstance(features,
+                          (list, tuple)), "features must be a list or a tuple"
         self.db = db
         self.features = features
         self.cellmask = cellmask
@@ -137,13 +140,13 @@ class NCXTDBLoader:
         return lac
 
     def feature_selector(self, label, key):
-        return feature_selector(label, key, self.features, cellmask=self.cellmask)
+        return feature_selector(
+            label, key, self.features, cellmask=self.cellmask)
 
     def __getitem__(self, index):
         record = self.db[index]
-
-        lac = read_mrc(record["data"])
-        label = read_mrc(record["annotation"])
+        lac = io.load(record["data"])
+        label = io.load(record["annotation"])
 
         label_sel, key = self.feature_selector(label, record["key"])
 
@@ -180,8 +183,7 @@ class NCXTDBLoader:
             binfunc = bin_ndarray_mode if mode else bin_ndarray_single
             bin_shape = [s // self.binning for s in image.shape]
             crop = [s * self.binning for s in bin_shape]
-            image = binfunc(
-                image[: crop[0], : crop[1], : crop[2]], self.binning)
+            image = binfunc(image[:crop[0], :crop[1], :crop[2]], self.binning)
 
         return image
 
@@ -193,15 +195,15 @@ class NCXTDBLoader:
 
 class NCXTDBCNNLoader(NCXTDBLoader):
     def __init__(
-        self,
-        db,
-        network,
-        features,
-        cellmask=True,
-        binning=None,
-        norm=None,
-        mask=None,
-        crop=None,
+            self,
+            db,
+            network,
+            features,
+            cellmask=True,
+            binning=None,
+            norm=None,
+            mask=None,
+            crop=None,
     ):
         super().__init__(db, features, cellmask, binning, norm, mask, crop)
         self.network = network
@@ -217,58 +219,6 @@ class NCXTDBCNNLoader(NCXTDBLoader):
         data = NCXTDBLoader.lac_to_input(self, lac)
         cell_mask = self.network.apply(data, probability=True)
         return np.stack((data[0], cell_mask[1]), axis=0)
-
-
-class DataLoader:
-    def __init__(self, folder, features, cellmask=True, binning=None, norm=False):
-        self.folder = folder
-        self.features = features
-        self.cellmask = cellmask
-        self.binning = binning
-        self.norm = norm
-        self.sample_paths = [
-            folder + name for name in os.listdir(folder) if ".json" in name
-        ]
-
-    def __len__(self):
-        return len(self.sample_paths)
-
-    def __getitem__(self, index):
-        data_path = self.sample_paths[index]
-
-        with open(data_path) as f:
-            data = json.load(f)
-        lac = read_mrc("/".join([self.folder, data["name"], data["lac"]]))
-        label = read_mrc(
-            "/".join([self.folder, data["name"], data["labelfield"]]))
-
-        label, key = feature_selector(
-            label, data["key"], self.features, cellmask=self.cellmask
-        )
-
-        if self.binning:
-            bin_shape = [s // self.binning for s in lac.shape]
-            crop = [s * self.binning for s in bin_shape]
-            # print(bin_shape, crop)
-            lac = bin_ndarray_single(
-                lac[: crop[0], : crop[1], : crop[2]], self.binning)
-            label = bin_ndarray_single(
-                label[: crop[0], : crop[1], : crop[2]], self.binning
-            )
-
-        if self.norm:
-            # lac_cell = lac[label > 0]
-            # cell_mean = np.mean(lac_cell)
-            # cell_std = np.std(lac_cell)
-            laclim = laclim2(lac)
-            # print(laclim)
-            lac = (lac - laclim[0]) / laclim[1]
-
-        return {
-            "input": lac.reshape(1, *lac.shape),
-            "target": label.astype(int),
-            "key": key,
-        }
 
 
 class ContextLoaderFeatures:
@@ -292,13 +242,12 @@ class ContextLoaderFeatures:
 
         with open(data_path) as f:
             data = json.load(f)
-        lac = read_mrc("/".join([self.folder, data["name"], data["lac"]]))
-        label = read_mrc(
-            "/".join([self.folder, data["name"], data["labelfield"]]))
+        lac = io.load("/".join([self.folder, data["name"], data["lac"]]))
+        label = io.load("/".join(
+            [self.folder, data["name"], data["labelfield"]]))
 
         label, key = feature_selector(
-            label, data["key"], self.features, cellmask=self.cellmask
-        )
+            label, data["key"], self.features, cellmask=self.cellmask)
         features = self.seg.features(lac)
 
         data = np.array([lac, *features])
