@@ -95,6 +95,10 @@ class NCXTMockLoader:
             "key": key,
         }
 
+    def __call__(self, data):
+        retval = data.copy()
+        return retval.reshape(1, *retval.shape)
+
 
 class NCXTDBLoader:
     def __init__(self,
