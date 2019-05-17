@@ -142,13 +142,23 @@ class SXT_CNN_WRAPPER:
         if np.argmin(self.valid_res[0]) == self.epoch - 1:
             self.epoch_best = self.epoch
             torch.save(self.model.state_dict(), self.file_weights_best)
+            state = dict()
+            for key in self.statedata:
+                state[key] = self.__getattribute__(key)
+            np.save(self.file_state, state)
 
     def init_data(self, **kwargs):
-        self.train_idx = kwargs["train_idx"]
-        self.test_idx = kwargs["test_idx"]
+        if self.train_idx is None:
+            self.train_idx = kwargs.pop("train_idx")
+        if self.test_idx is None:
+            self.test_idx = kwargs.pop("test_idx")
 
         self.processor.init_data(
-            self.loader, working_directory=self.params["working_directory"], **kwargs
+            self.loader,
+            working_directory=self.params["working_directory"],
+            train_idx=self.train_idx,
+            test_idx=self.test_idx,
+            **kwargs,
         )
         return
 
@@ -264,6 +274,10 @@ class SXT_CNN_WRAPPER:
         plot_cfm(ax2, train_cfm)
         plot_cfm(ax3, valid_cfm)
 
+        ax1.set_xlabel("Loss function")
+        ax2.set_xlabel("dice: Trainging")
+        ax2.set_xlabel("dice: Validation")
+
     def plot_example(self, index=0, mode="train"):
         if mode == "train":
             folder = self.params["working_directory"] + "train/"
@@ -376,7 +390,9 @@ class SXT_CNN_WRAPPER:
         # print(f'retval {retval.shape}')
         return retval
 
-    def evaluate_sample(self, loader, index, plot=False):
+    def evaluate_sample(self, index, loader=None, plot=False):
+        if loader is None:
+            loader = self.loader
         # print(f'Loading sample')
         sample = loader[index]
         data = sample["input"]

@@ -73,10 +73,11 @@ class SegFactory:
     def set_segargs(self, **kwargs):
         self.seg_args.update(kwargs)
 
-    def __call__(self, init=False, reset=False):
+    def __call__(self, **kwargs):
         assert self.loader is not None, "Undefined loader"
         assert self.model is not None, "undefined model"
         assert self.processor is not None, "undefined processor"
+        arg_init = kwargs.get("init", False)
 
         loader = self.loader(self.database, **self.loader_args)
         model = self.model(**self.model_args)
@@ -94,19 +95,22 @@ class SegFactory:
             self.seg_args["working_directory"] = wd
 
         seg = SXT_CNN_WRAPPER(loader, model, processor, self.seg_args)
-        if init:
+        if arg_init:
+            init_kwargs = dict(kwargs)
+            init_kwargs.pop("init")
             train, test = (
                 [i for i in range(len(loader))],
                 [i for i in range(len(loader))],
             )
-            seg.init_data(train_idx=train, test_idx=test, reset=reset)
+            seg.init_data(train_idx=train, test_idx=test, **init_kwargs)
 
         return seg
 
-    def kfold(self, index, k, reset=False):
+    def kfold(self, index, k, **kwargs):
         assert self.loader is not None, "Undefined loader"
         assert self.model is not None, "undefined model"
         assert self.processor is not None, "undefined processor"
+        arg_init = kwargs.get("init", False)
 
         loader = self.loader(self.database, **self.loader_args)
         model = self.model(**self.model_args)
@@ -115,24 +119,29 @@ class SegFactory:
         train, test = kfold(index, k, len(loader))
         fold_args = {"train": train, "test": test}
 
-        print(f"K-fold ({k}) training on train {train} test {test} ")
-
         dataidentifier = stablehash(fold_args, self.loader_args, self.processor_args)
         cnnidentifier = stablehash(self.model_args)
 
-        wd = f"d:/2019/SXT_CNN/data_{type(processor).__name__}_{dataidentifier}/"
         name = f"SXT_CNN_{type(model).__name__}_{cnnidentifier}"
 
-        seg_params = {
-            "name": name,
-            "working_directory": wd,
-            "ignore": self.ignore_index,
-        }
+        seg_params = {"name": name, "ignore": self.ignore_index}
+        self.seg_args.update(seg_params)
+        if self.working_directory:
+            wd = f"{self.working_directory}/data_{type(processor).__name__}_{dataidentifier}/"
+            self.seg_args["working_directory"] = wd
 
-        seg = SXT_CNN_WRAPPER(loader, model, processor, seg_params)
-        seg.init_data(train_idx=train, test_idx=test, reset=reset)
+        print(f"K-fold ({k}) training on train {train} test {test} ")
 
-        return seg, loader
+        seg = SXT_CNN_WRAPPER(loader, model, processor, self.seg_args)
+        seg.train_idx = train
+        seg.test_idx = test
+        if arg_init:
+            print("Init kfold")
+            init_kwargs = dict(kwargs)
+            init_kwargs.pop("init")
+            seg.init_data(**init_kwargs)
+
+        return seg
 
     def asdict(self):
         retval = dict()
