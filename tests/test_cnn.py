@@ -15,18 +15,13 @@ class TestCNN(unittest.TestCase):
         self.n_labels = 3
         self.temp_wd = "__tempwd__/"
 
-        self.loader = NCXTMockLoader(
-            shape=(3, 4, 5), labels=self.n_labels, length=3)
+        self.loader = NCXTMockLoader(shape=(3, 4, 5), labels=self.n_labels, length=3)
         self.processor = SingleBlockProcessor(block_shape=(16, 16, 16))
 
-        self.params = {
-            "name": f"test_devices",
-            "working_directory": self.temp_wd
-        }
+        self.params = {"name": f"test_devices", "working_directory": self.temp_wd}
 
         model = UNet3D(self.n_labels)
-        seg = SXT_CNN_WRAPPER(
-            self.loader, model, self.processor, params=self.params)
+        seg = SXT_CNN_WRAPPER(self.loader, model, self.processor, params=self.params)
         seg.init_data(**{"train_idx": [0, 1], "test_idx": [2], "reset": True})
 
     def test_devices(self):
@@ -38,8 +33,7 @@ class TestCNN(unittest.TestCase):
                 "device": device,
                 "working_directory": self.temp_wd,
             }
-            seg = SXT_CNN_WRAPPER(
-                self.loader, model, self.processor, params=params)
+            seg = SXT_CNN_WRAPPER(self.loader, model, self.processor, params=params)
             seg.epoch_step()
 
     def test_pipe_cuda(self):
@@ -49,10 +43,9 @@ class TestCNN(unittest.TestCase):
             "device": "cuda",
             "working_directory": self.temp_wd,
         }
-        seg = SXT_CNN_WRAPPER(
-            self.loader, model, self.processor, params=self.params)
+        seg = SXT_CNN_WRAPPER(self.loader, model, self.processor, params=self.params)
         seg.run()
-        seg.evaluate_sample(self.loader, 0, plot=False)
+        seg.evaluate_sample(0, self.loader, plot=False)
         seg.plot_example(0)
 
     def test_pipe_cpu(self):
@@ -62,10 +55,9 @@ class TestCNN(unittest.TestCase):
             "device": "cpu",
             "working_directory": self.temp_wd,
         }
-        seg = SXT_CNN_WRAPPER(
-            self.loader, model, self.processor, params=self.params)
+        seg = SXT_CNN_WRAPPER(self.loader, model, self.processor, params=self.params)
         seg.run()
-        seg.evaluate_sample(self.loader, 0, plot=False)
+        seg.evaluate_sample(0, self.loader, plot=False)
         seg.plot_example(0)
 
     def test_set_device(self):
@@ -75,8 +67,7 @@ class TestCNN(unittest.TestCase):
             "device": "cpu",
             "working_directory": self.temp_wd,
         }
-        seg = SXT_CNN_WRAPPER(
-            self.loader, model, self.processor, params=self.params)
+        seg = SXT_CNN_WRAPPER(self.loader, model, self.processor, params=self.params)
 
         seg.epoch_step()
         seg.set_device("cuda:0")
