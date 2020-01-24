@@ -4,7 +4,6 @@ import numpy as np
 
 
 class TestBinning(unittest.TestCase):
-    # @unittest.skip("Fix pybind first")
     def test_volume(self):
         shape = (32, 32, 32)
         for binning in [2, 4, 8]:
@@ -37,7 +36,7 @@ class TestUpscale(unittest.TestCase):
         shape = (32, 32, 32)
         for binning in [2, 4]:
             bin_shape = [int(s / binning) for s in shape]
-            image = np.random.random(shape).astype('float32')
+            image = np.random.random(shape).astype("float32")
 
             bin_ref = sxtcnn.utils.upscale(image, binning)
             bin_pb = sxtcnn.volumeblocks.upscale_volume(image, binning)
@@ -51,7 +50,7 @@ class TestUpscale(unittest.TestCase):
             for binning in [2, 4]:
                 bin_shape = [int(s / binning) for s in shape]
                 bin_shape[0] = ch
-                image = np.random.random(shape).astype('float32')
+                image = np.random.random(shape).astype("float32")
 
                 bin_ref = sxtcnn.utils.upscale_dims(image, [1, 2, 3], binning)
                 bin_pb = sxtcnn.volumeblocks.upscale_tensor(image, binning)
@@ -77,8 +76,7 @@ class TestFuse(unittest.TestCase):
             tensor = np.random.random((ch, 50, 51, 52)).astype("float32")
 
             blocks = sxtcnn.volumeblocks.split(tensor, block_shape, binning=1)
-            tensor_fused = sxtcnn.volumeblocks.fuse(
-                blocks, tensor.shape, binning=1)
+            tensor_fused = sxtcnn.volumeblocks.fuse(blocks, tensor.shape, binning=1)
 
             np.testing.assert_array_almost_equal(tensor, tensor_fused)
             self.assertTrue(True)

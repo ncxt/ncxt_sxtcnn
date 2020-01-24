@@ -1,12 +1,14 @@
 """
-Stuff to handle the parsing of the amira mesh header
+Stuff to handle the parsing of the Amira mesh header
 """
-import logging
+
 import operator
 import re
 import zlib
 from functools import reduce
 import numpy as np
+from . import LOGGER
+from .utils import Matcher
 
 
 class HeaderDict:
@@ -49,7 +51,7 @@ class HeaderDict:
             if is_item():
                 item_string = self._inputstring[previous_stop + 1 : pos - 1].strip()
                 if item_string:
-                    logging.debug("    Found root level item '%s'", item_string)
+                    LOGGER.debug("    Found root level item '%s'", item_string)
                     self._items.append(item_string)
                 previous_stop = pos
             prev_char = char
@@ -68,18 +70,18 @@ class HeaderDict:
             if nextstr[-1] != ",":
                 nextstr += ","
 
-            logging.debug("Found Description %s", desc)
+            LOGGER.debug("Found Description %s", desc)
             resdict[desc] = HeaderDict(nextstr + "\n").parse()
 
         return resdict
 
 
 def rle_decompress(buf):
-    """ rle decoiding, from https://github.com/strawlab/py_amira_file_reader """
+    """ rle decoding, from https://github.com/strawlab/py_amira_file_reader """
     result = []
     idx = 0
-    buflen = len(buf)
-    while idx < buflen:
+    bufferlength = len(buf)
+    while idx < bufferlength:
         control_byte = ord(buf[idx : idx + 1])
         idx += 1
         if control_byte == 0:
@@ -98,41 +100,35 @@ def rle_decompress(buf):
     return final_result
 
 
-class Matcher:
-    """ convenience class for regexp mathcing """
-
-    def __init__(self, rexp):
-        self.rexp = rexp
-
-    def __call__(self, buf):
-        matchobj = self.rexp.match(buf)
-        return matchobj is not None
-
-
 class AmiraMesh:
-    """ AmiraMesh, only wokrs for volumetric data"""
+    """ AmiraMesh, only works for volumetric data"""
 
-    def __init__(self, filepath):
+    def __init__(self, filepath, headeronly=False):
         self.re_bytedata_info = re.compile(r"^@(\d+)(\((\w+),(\d+)\))?$")
         self.is_bytedata_info = Matcher(self.re_bytedata_info)
-
+        self.filepath = filepath
         self.defines = dict()
         self.lattices = dict()
 
         self._header = []
         self.buffer = []
         self.arrays = dict()
+        self.parameters = dict()
 
-        with open(filepath, mode="rb") as fileobj:
-            bline = fileobj.readline()
+    def loadmesh(self, headeronly=False):
+        msg = f"loadmesh, headeronly {headeronly}"
+        LOGGER.info(msg)
+
+        with open(self.filepath, mode="rb") as fileobj:
+            binaryline = fileobj.readline()
             count = 0
-            while bline != b"# Data section follows\n" and bline:
+            while binaryline != b"# Data section follows\n" and binaryline:
                 try:
-                    line = bline.decode("utf-8")
+                    line = binaryline.decode("utf-8")
                 except UnicodeDecodeError:
-                    logging.warning("Cannot decode line\n %s", bline)
-                    line = bline.decode("utf-8", "ignore")
-                    logging.warning("Decoded with 'ignore'\n %s", line)
+                    LOGGER.warning("Cannot decode line\n %s", binaryline)
+                    line = binaryline.decode("utf-8", "ignore")
+                    LOGGER.warning("Decoded with 'ignore'\n %s", line)
 
                 if line[0] == "#" or line == "\n":
                     pass
@@ -144,9 +140,11 @@ class AmiraMesh:
                     self._header.append(line)
                     count += 1
 
-                bline = fileobj.readline()
+                binaryline = fileobj.readline()
             header = HeaderDict("".join(self._header)).parse()
             self.parameters = header["Parameters"]
+            if headeronly:
+                return
 
             self.buffer = fileobj.read()
             lattice_shape = [int(value) for value in self.defines["Lattice"]]
@@ -156,8 +154,8 @@ class AmiraMesh:
                 matchobj = self.re_bytedata_info.match(value["dataargs"])
                 bytedata_id, enc_size, encoding, size = matchobj.groups()
 
-                logging.info("Loading lattice %s", key)
-                logging.info(
+                LOGGER.info("Loading lattice %s", key)
+                LOGGER.info(
                     "bytedata_id %s, enc_size %s, encoding %s, size %s",
                     bytedata_id,
                     enc_size,
@@ -179,8 +177,8 @@ class AmiraMesh:
                     size = int(size)
 
                 token, self.buffer = self.buffer[:3], self.buffer[3:]
-                logging.debug("token is %s", token)
-                logging.debug("Buffer size %d size %d", len(self.buffer), size)
+                LOGGER.debug("token is %s", token)
+                LOGGER.debug("Buffer size %d size %d", len(self.buffer), size)
                 binary_buf, self.buffer = self.buffer[:size], self.buffer[size:]
 
                 if encoding == "raw":
@@ -193,12 +191,13 @@ class AmiraMesh:
                     raw_buf = binary_buf
                 else:
                     raise ValueError("unknown encoding %r" % encoding)
-                nptype = {"float": "float32", "byte": "uint8"}
+                nptype = {"float": np.float32, "byte": np.uint8, "ushort": np.ushort}
                 arr = np.frombuffer(raw_buf, dtype=nptype[dtype])
                 arr.shape = lattice_shape[2], lattice_shape[1], lattice_shape[0]
                 # arr = np.swapaxes(arr, 0, 2)
 
                 self.arrays[bytedata_id] = arr
+        return self
 
     def add_lattice(self, line):
         """ check if line is a lattice and add to dictionary of lattices"""
@@ -212,7 +211,7 @@ class AmiraMesh:
                 "type": split[3],
                 "dataargs": split[5],
             }
-            logging.info("Added lattice %s", self.lattices[lattice_id])
+            LOGGER.info("Added lattice %s", self.lattices[lattice_id])
             return True
         return False
 
@@ -221,21 +220,24 @@ class AmiraMesh:
         if "define" in line:
             split = line.split()
             self.defines[split[1]] = split[2:]
-            logging.info("Added define %s with arguments %s", split[1], split[2:])
+            LOGGER.info("Added define %s with arguments %s", split[1], split[2:])
             return True
         return False
 
     @property
     def key(self):
         """ return dictionary containing material key,value pairs"""
-        key = dict()
-        for name_enum, name in enumerate(self.parameters["Materials"].keys()):
-            key[name] = name_enum
-        # for k, v in self.parameters.items():
-        #     print(f"{k} val: {v}")
-        return key
+        if not self.parameters:
+            self.loadmesh(headeronly=True)
+
+        return {
+            name: name_enum
+            for name_enum, name in enumerate(self.parameters["Materials"].keys())
+        }
 
     @property
     def arr(self):
-        """ return first lattice as ndarray"""
+        """ return the first lattice as ndarray"""
+        if not self.arrays:
+            self.loadmesh(headeronly=False)
         return self.arrays["1"]

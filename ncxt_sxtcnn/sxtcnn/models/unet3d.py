@@ -1,5 +1,3 @@
-from collections import OrderedDict
-
 import numpy as np
 import torch
 import torch.nn as nn
@@ -14,15 +12,41 @@ else:
 
 # adapted from https://github.com/jaxony/unet-pytorch
 
-# TODO: argument for batchnorm and dropout
+
+class Conv3dDirichlet(nn.Module):
+    def __init__(self, in_channels, out_channels, stride=1, bias=True, groups=1):
+        """3x3x3 convolutional operator with dirichlet boundary condtions
+        
+        Arguments:
+            in_channels {int} -- number of input channels
+            out_channels {int} -- number of output channels
+        
+        Keyword Arguments:
+            stride {int} -- Stride of the convolution (default: {1})
+            bias {bool} -- [description] (default: {True})
+            groups {int} -- [description] (default: {1})
+        """
+
+        super(Conv3dDirichlet, self).__init__()
+
+        self.conv = nn.Conv3d(
+            in_channels,
+            out_channels,
+            kernel_size=3,
+            stride=stride,
+            padding=0,
+            bias=bias,
+            groups=groups,
+        )
+
+    def forward(self, x):
+        x = torch.cat([x[:, :, :1], x, x[:, :, -1:]], dim=2)
+        x = torch.cat([x[:, :, :, :1], x, x[:, :, :, -1:]], dim=3)
+        x = torch.cat([x[:, :, :, :, :1], x, x[:, :, :, :, -1:]], dim=4)
+        return self.conv(x)
 
 
-def conv3x3x3(in_channels,
-              out_channels,
-              stride=1,
-              padding=0,
-              bias=True,
-              groups=1):
+def conv3x3x3(in_channels, out_channels, stride=1, padding=1, bias=True, groups=1):
     return nn.Conv3d(
         in_channels,
         out_channels,
@@ -30,24 +54,61 @@ def conv3x3x3(in_channels,
         stride=stride,
         padding=padding,
         bias=bias,
-        groups=groups)
+        groups=groups,
+    )
 
 
-def upconv2x2x2(in_channels, out_channels, mode='transpose'):
-    if mode == 'transpose':
-        return nn.ConvTranspose3d(
-            in_channels, out_channels, kernel_size=2, stride=2)
+def upconv2x2x2(in_channels, out_channels, mode="transpose"):
+    if mode == "transpose":
+        return nn.ConvTranspose3d(in_channels, out_channels, kernel_size=2, stride=2)
     else:
         # out_channels is always going to be the same
         # as in_channels
         return nn.Sequential(
-            nn.Upsample(mode='bilinear', scale_factor=2),
-            conv1x1x1(in_channels, out_channels))
+            nn.Upsample(mode="bilinear", scale_factor=2),
+            conv1x1x1(in_channels, out_channels),
+        )
 
 
 def conv1x1x1(in_channels, out_channels, groups=1):
-    return nn.Conv3d(
-        in_channels, out_channels, kernel_size=1, groups=groups, stride=1)
+    return nn.Conv3d(in_channels, out_channels, kernel_size=1, groups=groups, stride=1)
+
+
+class ConvBlock(nn.Module):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        dropout=None,
+        instancenorm=True,
+        dirichlet=False,
+    ):
+        super(ConvBlock, self).__init__()
+
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.dropout = None
+        self.instance_norm = None
+        if dirichlet:
+            self.conv = Conv3dDirichlet(self.in_channels, self.out_channels)
+        else:
+            self.conv = conv3x3x3(self.in_channels, self.out_channels)
+
+        if dropout is not None:
+            self.dropout = nn.Dropout3d(p=dropout)
+
+        if instancenorm:
+            self.instance_norm = nn.InstanceNorm3d(self.out_channels)
+
+        self.pool = nn.MaxPool3d(kernel_size=2, stride=2)
+
+    def forward(self, x):
+        x = self.conv(x)
+        if self.dropout is not None:
+            x = self.dropout(x)
+        if self.instance_norm is not None:
+            x = self.instance_norm(x)
+        return F.relu(x)
 
 
 class DownConv(nn.Module):
@@ -56,51 +117,41 @@ class DownConv(nn.Module):
     A ReLU activation follows each convolution.
     """
 
-    def __init__(self,
-                 in_channels,
-                 out_channels,
-                 dropout=None,
-                 batchnorm=None,
-                 padding=1,
-                 pooling=True):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        dropout=None,
+        instancenorm=True,
+        dirichlet=False,
+        pooling=True,
+    ):
         super(DownConv, self).__init__()
-
-        self.in_channels = in_channels
-        self.out_channels = out_channels
         self.pooling = pooling
-        self.padding = padding
-        self.dropout3d = None
-        self.batch_norm = None
-
-        self.conv1 = conv3x3x3(
-            self.in_channels, self.out_channels, padding=self.padding)
-        self.conv2 = conv3x3x3(
-            self.out_channels, self.out_channels, padding=self.padding)
-
-        if dropout is not None:
-            self.dropout3d = nn.Dropout3d(p=dropout)
-
-        if batchnorm is not None:
-            self.batch_norm = nn.BatchNorm3d(self.out_channels)
-
+        self.block1 = ConvBlock(
+            in_channels, out_channels, dropout, instancenorm, dirichlet
+        )
+        self.block2 = ConvBlock(
+            out_channels, out_channels, dropout, instancenorm, dirichlet
+        )
         if self.pooling:
             self.pool = nn.MaxPool3d(kernel_size=2, stride=2)
 
     def forward(self, x):
         orig = x.shape
-        x = F.relu(self.conv1(x))
-        x = F.relu(self.conv2(x))
-
-        if self.batch_norm is not None:
-            x = self.batch_norm(x)
-        if self.dropout3d is not None:
-            x = self.dropout3d(x)
+        x = self.block1(x)
+        if DEBUG:
+            print(f"DownConv {orig} -> {x.shape}")
+        orig = x.shape
+        x = self.block2(x)
+        if DEBUG:
+            print(f"DownConv {orig} -> {x.shape}")
 
         before_pool = x
         if self.pooling:
             x = self.pool(x)
-
-        if DEBUG: print(f'DownConv {orig} -> {x.shape}')
+        if DEBUG:
+            print(f"DownConv {orig} -> {x.shape}")
         return x, before_pool
 
 
@@ -110,36 +161,24 @@ class UpConv(nn.Module):
     A ReLU activation follows each convolution.
     """
 
-    def __init__(self,
-                 in_channels,
-                 out_channels,
-                 batchnorm=None,
-                 merge_mode='concat',
-                 up_mode='transpose',
-                 padding=1):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        dropout=None,
+        instancenorm=True,
+        dirichlet=False,
+        up_mode="transpose",
+    ):
         super(UpConv, self).__init__()
 
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.merge_mode = merge_mode
-        self.up_mode = up_mode
-        self.padding = padding
-        self.batch_norm = None
-
-        self.upconv = upconv2x2x2(
-            self.in_channels, self.out_channels, mode=self.up_mode)
-
-        if self.merge_mode == 'concat':
-            self.conv1 = conv3x3x3(
-                2 * self.out_channels, self.out_channels, padding=self.padding)
-        else:
-            # num of input channels to conv2 is same
-            self.conv1 = conv3x3x3(
-                self.out_channels, self.out_channels, padding=self.padding)
-        self.conv2 = conv3x3x3(
-            self.out_channels, self.out_channels, padding=self.padding)
-        if batchnorm is not None:
-            self.batch_norm = nn.BatchNorm3d(self.out_channels)
+        self.upconv = upconv2x2x2(in_channels, out_channels, mode=up_mode)
+        self.block1 = ConvBlock(
+            2 * out_channels, out_channels, dropout, instancenorm, dirichlet
+        )
+        self.block2 = ConvBlock(
+            out_channels, out_channels, dropout, instancenorm, dirichlet
+        )
 
     def forward(self, from_down, from_up):
         """ Forward pass
@@ -149,31 +188,13 @@ class UpConv(nn.Module):
         """
         from_up_orig = from_up.shape
         from_up = self.upconv(from_up)
-
-        if self.padding == 0:
-            l_from_down = from_up.shape[-1]
-            l_from_up = from_down.shape[-1]
-            l_crop = (int)((l_from_up - l_from_down) / 2)
-            from_down = from_down[:, :, l_crop:-l_crop, l_crop:-l_crop, l_crop:
-                                  -l_crop]
-            if DEBUG:
-                print(
-                    f'UpConv: conc1: from_down {l_from_down} from_up {l_from_up} crop = {l_crop}'
-                )
-
-        if self.merge_mode == 'concat':
-            x = torch.cat((from_up, from_down), 1)
-        else:
-            x = from_up + from_down
-
-        x = F.relu(self.conv1(x))
-        x = F.relu(self.conv2(x))
-        if self.batch_norm is not None:
-            x = self.batch_norm(x)
+        x = torch.cat((from_up, from_down), 1)
+        x = self.block1(x)
+        x = self.block2(x)
 
         if DEBUG:
             print(
-                f'UpConv from_down {from_down.shape} from_up {from_up_orig} -> {x.shape}'
+                f"UpConv from_down {from_down.shape} from_up {from_up_orig} -> {x.shape}"
             )
         return x
 
@@ -198,16 +219,17 @@ class UNet3D(nn.Module):
         the tranpose convolution (specified by upmode='transpose')
     """
 
-    def __init__(self,
-                 num_classes,
-                 in_channels=1,
-                 depth=3,
-                 start_filts=32,
-                 dropout=None,
-                 batchnorm=None,
-                 padding=1,
-                 up_mode='transpose',
-                 merge_mode='concat'):
+    def __init__(
+        self,
+        num_classes,
+        in_channels=1,
+        depth=3,
+        start_filts=32,
+        dropout=None,
+        instancenorm=False,
+        dirichlet=False,
+        up_mode="transpose",
+    ):
         """
         Arguments:
             in_channels: int, number of channels in the input tensor.
@@ -221,36 +243,22 @@ class UNet3D(nn.Module):
         """
         super(UNet3D, self).__init__()
 
-        if up_mode in ('transpose', 'upsample'):
+        if up_mode in ("transpose", "upsample"):
             self.up_mode = up_mode
         else:
-            raise ValueError("\"{}\" is not a valid mode for "
-                             "upsampling. Only \"transpose\" and "
-                             "\"upsample\" are allowed.".format(up_mode))
-
-        if merge_mode in ('concat', 'add'):
-            self.merge_mode = merge_mode
-        else:
-            raise ValueError("\"{}\" is not a valid mode for"
-                             "merging up and down paths. "
-                             "Only \"concat\" and "
-                             "\"add\" are allowed.".format(up_mode))
-
-        # NOTE: up_mode 'upsample' is incompatible with merge_mode 'add'
-        if self.up_mode == 'upsample' and self.merge_mode == 'add':
-            raise ValueError("up_mode \"upsample\" is incompatible "
-                             "with merge_mode \"add\" at the moment "
-                             "because it doesn't make sense to use "
-                             "nearest neighbour to reduce "
-                             "depth channels (by half).")
+            raise ValueError(
+                '"{}" is not a valid mode for '
+                'upsampling. Only "transpose" and '
+                '"upsample" are allowed.'.format(up_mode)
+            )
 
         self.num_classes = num_classes
         self.in_channels = in_channels
         self.start_filts = start_filts
         self.dropout = dropout
-        self.batchnorm = batchnorm
+        self.instancenorm = instancenorm
+        self.dirichlet = dirichlet
         self.depth = depth
-        self.padding = padding
 
         self.down_convs = []
         self.up_convs = []
@@ -258,16 +266,17 @@ class UNet3D(nn.Module):
         # create the encoder pathway and add to a list
         for i in range(depth):
             ins = self.in_channels if i == 0 else outs
-            outs = self.start_filts * (2**i)
+            outs = self.start_filts * (2 ** i)
             pooling = True if i < depth - 1 else False
 
             down_conv = DownConv(
                 ins,
                 outs,
+                dropout=self.dropout,
+                instancenorm=self.instancenorm,
+                dirichlet=self.dirichlet,
                 pooling=pooling,
-                padding=self.padding,
-                batchnorm=self.batchnorm,
-                dropout=self.dropout)
+            )
             self.down_convs.append(down_conv)
 
         # create the decoder pathway and add to a list
@@ -279,9 +288,10 @@ class UNet3D(nn.Module):
                 ins,
                 outs,
                 up_mode=up_mode,
-                merge_mode=merge_mode,
-                padding=self.padding,
-                batchnorm=self.batchnorm)
+                dropout=self.dropout,
+                instancenorm=self.instancenorm,
+                dirichlet=self.dirichlet,
+            )
             self.up_convs.append(up_conv)
 
         self.conv_final = conv1x1x1(outs, self.num_classes)
@@ -308,10 +318,12 @@ class UNet3D(nn.Module):
 
         # encoder pathway, save outputs for merging
         for i, module in enumerate(self.down_convs):
+
             x, before_pool = module(x)
             encoder_outs.append(before_pool)
 
         for i, module in enumerate(self.up_convs):
+
             before_pool = encoder_outs[-(i + 2)]
             x = module(before_pool, x)
 
@@ -321,7 +333,8 @@ class UNet3D(nn.Module):
         x_orig = x.shape
         x = self.conv_final(x)
 
-        if DEBUG: print(f'UNet final {x_orig} -> {x.shape}')
+        if DEBUG:
+            print(f"UNet final {x_orig} -> {x.shape}")
         return x
 
     def features(self, x):
@@ -339,27 +352,22 @@ class UNet3D(nn.Module):
         return x
 
     def summary(self, shape):
-        return summary(self, shape, device='cpu')
+        return summary(self, shape, device="cpu")
 
 
 DEBUG = False
 if __name__ == "__main__":
-    DEBUG = False
-    print(f'Testing debug {DEBUG}')
+    DEBUG = True
+    print(f"Testing debug {DEBUG}")
     """
     testing
     """
-
-    model = UNet3D(
-        5,
-        in_channels=1,
-        depth=4,
-        start_filts=32,
-        merge_mode='concat',
-        padding=1)
+    L = 32
+    MODEL = UNet3D(5, in_channels=1, depth=3, start_filts=16)
 
     if DEBUG:
-        x = Variable(torch.FloatTensor(np.random.random((1, 1, 16, 16, 16))))
-        out = model(x)
+        TEST_TENSOR = Variable(torch.FloatTensor(np.random.random((1, 1, L, L, L))))
+        OUT = MODEL(TEST_TENSOR)
     else:
-        model.summary((1, 32, 32, 32))
+        MODEL.summary((1, L, L, L))
+

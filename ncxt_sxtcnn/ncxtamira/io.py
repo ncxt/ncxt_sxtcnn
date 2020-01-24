@@ -31,7 +31,7 @@ def loadlabel(filepath):
         [Dict] -- Dectionary containing the material key-value pairs
     """
 
-    mesh = AmiraMesh(filepath)
+    mesh = AmiraMesh(filepath).loadmesh(headeronly=False)
     return mesh.arr, mesh.key
 
 

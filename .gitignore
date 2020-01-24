@@ -17,4 +17,10 @@
 
 # temp wd
 **/__tempwd__/
+**/__temp__/
+
+#mock data
+**/mockdata/
+
+dev.py
 

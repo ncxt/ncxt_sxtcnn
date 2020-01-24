@@ -1,41 +1,50 @@
 """ handling of amira .hx projects"""
 
-import logging
-import os
+import re
 from pathlib import Path
 
+from . import LOGGER
+from .fuzzylabels import match_key
 from .mesh import AmiraMesh
 from .plotters import plot_data
-import re
-import json
-from .read_write_mrc import write_mrc
+from .utils import Matcher, ensure_path
+
+COLORS = [
+    "0.7 0.8 0.8",
+    "0.37 0.61 0.62",
+    "1 0 0",
+    "1 1 0",
+    "1 0 1",
+    "0 1 0",
+    "0 0 1",
+    "0.5 0.5 0",
+    "0 1 1",
+    "0.5 0 0.5",
+    "0.85 0.4 0.4",
+    "0 0.5 1",
+    "0.5 0.25 1",
+]
 
 
-class Matcher:
-    """ convenience class for regexp mathcing """
-
-    def __init__(self, rexp):
-        self.rexp = rexp
-
-    def __call__(self, buf):
-        matchobj = self.rexp.match(buf)
-        return matchobj is not None
+def labelcolor(i):
+    """Label color module len(COLORS) for materials"""
+    return COLORS[i % len(COLORS)]
 
 
 def find_load(lines, tag):
+    """ find a dataload in .hx file containing argument 'tag' """
     re_load = re.compile(r'^.+?\$\{\w+\}\/(.+?)\/(.+?)["\s].+$')
     is_loader = Matcher(re_load)
-    """ find a dataload in .hx file containin argument 'tag' """
     for line in lines:
         if all(x.lower() in line.lower() for x in ["[ load", tag]):
             if is_loader(line):
                 return "/".join(re_load.match(line).groups())
 
-    logging.warning("No matching connection for %s", tag)
+    LOGGER.warning("No matching connection for %s", tag)
     return None
 
 
-def parse_ImageData(lines, filename):
+def parse_imagedata(lines, filename):
     """
     Connected density values are of form:
     "labelimage" ImageData connect "floatimage"
@@ -43,12 +52,11 @@ def parse_ImageData(lines, filename):
     connected data is the last argument of the line
     """
 
-    # print("searcing ", filename)
     for line in lines:
         if all(x in line for x in [filename, "ImageData connect"]):
             return line.split()[-1]
 
-    logging.warning("No matching connection for %s", filename)
+    LOGGER.warning("No matching connection for %s", filename)
     return None
 
 
@@ -62,23 +70,39 @@ def parse_hx(filename):
     label_arg = find_load(lines, ".Labels")
     label_path = path.parent / label_arg
 
-    logging.info("Found label_arg  %s", str(label_arg))
-    logging.info("Found label_path  %s", str(label_path))
+    LOGGER.info("Found label_arg  %s", str(label_arg))
+    LOGGER.info("Found label_path  %s", str(label_path))
 
-    datafile = parse_ImageData(lines, str(label_path.name))
+    datafile = parse_imagedata(lines, str(label_path.name))
 
     data_arg = find_load(lines, datafile)
     data_path = path.parent / data_arg
 
-    logging.info("Found data_arg  %s", str(data_arg))
-    logging.info("Found data_path  %s", str(data_path))
+    LOGGER.info("Found data_arg  %s", str(data_arg))
+    LOGGER.info("Found data_path  %s", str(data_path))
 
     return data_path, label_path
 
 
 class AmiraProject:
-    def __init__(self, hxpath):
+    """Minimal amira project with:
+        a data image (float)
+        a segmentation image (int)
+        a material key
+    """
+
+    def __init__(self, hxpath, sanitize=True):
+        """load .hx amira project
+
+        Arguments:
+            hxpath {string} -- Path to .hx project file
+        
+        Keyword Arguments:
+            sanitize {bool} -- sanitize material keys on load (default: {True})
+        """
+
         self.hxpath = Path(hxpath)
+        self.sanitize = sanitize
         self.folder = self.hxpath.parent
         self.stem = self.hxpath.stem
 
@@ -87,6 +111,23 @@ class AmiraProject:
         self._lac = None
         self._labels = None
         self._key = None
+
+    # @classmethod
+    # def from_data(cls, lac,label, key):
+    #     return cls(name, date.today().year - birthYear)
+
+    def save(self, filepath):
+        """Save Amira project to path
+
+        Arguments:
+            filepath {string/Path} -- Path to .hx file
+        """
+        path = Path(filepath)
+        assert path.suffix == ".hx", "Save projects as .hx files!"
+        folder = path.parent
+        stem = path.stem
+        template = AmiraTemplate(self.lac, self.labels, self.key, name=stem)
+        template.export(folder)
 
     @property
     def lac(self):
@@ -110,57 +151,33 @@ class AmiraProject:
     def key(self):
         """ lazy loading material key """
 
-        if self._labels is not None and self._key is not None:
+        if self._key is not None:
             return self._key
 
-        self.loadlabelfile()
+        self._key = AmiraMesh(self.labelfile, headeronly=True).key
         return self._key
 
     def loadlabelfile(self):
         """ Load labels and key from labelfile"""
 
-        mesh = AmiraMesh(self.labelfile)
+        mesh = AmiraMesh(self.labelfile).loadmesh()
         self._key = mesh.key
         self._labels = mesh.arr
 
     def preview(self):
+        """plot a preview of the project"""
         plot_data(self.lac, self.labels, self.stem, self.key)
 
-    def export(self, folder):
-        sample_folder = Path(folder) / self.stem
-        lac_name = self.stem + ".mrc"
-        label_name = self.stem + ".labels.mrc"
 
-        data = {
-            "name": self.stem,
-            "lac": lac_name,
-            "labelfield": label_name,
-            "key": self.key,
-        }
+class CellProject(AmiraProject):
+    @property
+    def key(self):
+        """ lazy loading material key """
 
-        # TODO:warnings for keys
-
-        print(f"Saving record to {sample_folder}")
-        json_path = sample_folder / (self.stem + ".json")
-        ensure_dir(json_path)
-        with open(json_path, "w") as outfile:
-            json.dump(data, outfile)
-
-        write_mrc(sample_folder / lac_name, self.lac.astype("float32"))
-        write_mrc(sample_folder / label_name, self.labels.astype("int8"))
-
-
-def ensure_dir(file_path):
-    """Ensure the folder exists for file path
-
-    Arguments:
-        file_path {string} -- full path to file
-    """
-
-    directory = os.path.dirname(file_path)
-
-    if not os.path.exists(directory):
-        os.makedirs(directory)
+        if self._labels is not None and self._key is not None:
+            return match_key(self._key)
+        self._key = AmiraMesh(self.labelfile, headeronly=True).key
+        return match_key(self._key)
 
 
 class AmiraTemplate:
@@ -176,6 +193,7 @@ class AmiraTemplate:
         self.name = name
 
     def preview(self):
+        """ Preview of the project template"""
         plot_data(self.lac, self.labels, self.name, self.key)
 
     @property
@@ -189,11 +207,12 @@ class AmiraTemplate:
         return f"{self.name}.labels"
 
     def loadline(self, name):
+        """return a load line for file "name" for the .hx header"""
         return f'[ load ${{SCRIPTDIR}}/{self.name}-files/{name} ] setLabel "{name}"\n'
 
     def _write_project(self, filepath):
         """ write project .hx file """
-        ensure_dir(filepath)
+        ensure_path(filepath)
         with open(filepath, mode="wb") as fileobj:
             fileobj.write(b"# Amira Project 630\n")
             fileobj.write(b"# Amira\n")
@@ -215,7 +234,14 @@ class AmiraTemplate:
             )
 
     def export(self, folder, name=None):
-        """ export template project to folder """
+        """ export template project to folder
+
+        Arguments:
+            folder {string} -- Export folder
+
+        Keyword Arguments:
+            name {string} -- Project name, defaults to self.name (default: {None})
+        """
 
         folder = Path(folder)
         if name:
@@ -235,15 +261,15 @@ def write_rec(filename, array):
     array = array.astype("float32")
     nz, ny, nx = array.shape
 
-    bb_arg = " ".join([f"0 {val-1}" for val in array.shape])
-    content_arg = "x".join([str(val) for val in array.shape])
+    # bb_arg = " ".join([f"0 {val-1}" for val in array.shape])
+    # content_arg = "x".join([str(val) for val in array.shape])
     parameters = [
         f'Content "{nx}x{ny}x{nz} float, uniform coordinates"',
         f"BoundingBox 0 {nx-1} 0 {ny-1} 0 {nz-1}",
         f'CoordType "uniform"',
     ]
 
-    ensure_dir(filename)
+    ensure_path(filename)
     with open(filename, mode="wb") as fileobj:
         fileobj.write(b"# AmiraMesh BINARY-LITTLE-ENDIAN 2.1\n")
         fileobj.write(str.encode(f"define Lattice {nx} {ny} {nz}\n"))
@@ -265,32 +291,23 @@ def write_label(filename, array, key):
     array = array.astype("uint8")
     nz, ny, nx = array.shape
 
-    COLORS = [
-        "0.7 0.8 0.8",
-        "0.37 0.61 0.62",
-        "1 0 0",
-        "1 1 0",
-        "1 0 1",
-        "0 1 0",
-        "0 0 1",
-        "0.5 0.5 0",
-        "0 1 1",
-        "0.5 0 0.5",
-        "0.85 0.4 0.4",
-        "0 0.5 1",
-        "0.5 0.25 1",
-    ]
-    materials = [f"{k} {{ Color {COLORS[v]} }}" for k, v, in key.items()]
+    material_names = ["NA"] * len(key)
+    for k, v in key.items():
+        material_names[v] = k
 
-    bb_arg = " ".join([f"0 {val-1}" for val in array.shape])
-    content_arg = "x".join([str(val) for val in array.shape])
+    materials = [
+        f"{name} {{ Color {labelcolor(i)} }}" for i, name in enumerate(material_names)
+    ]
+
+    # bb_arg = " ".join([f"0 {val-1}" for val in array.shape])
+    # content_arg = "x".join([str(val) for val in array.shape])
     parameters = [
         f'Content "{nx}x{ny}x{nz} byte, uniform coordinates"',
         f"BoundingBox 0 {nx-1} 0 {ny-1} 0 {nz-1}",
         f'CoordType "uniform"',
     ]
 
-    ensure_dir(filename)
+    ensure_path(filename)
     with open(filename, mode="wb") as fileobj:
         fileobj.write(b"# AmiraMesh BINARY-LITTLE-ENDIAN 2.1\n")
         fileobj.write(str.encode(f"define Lattice {nx} {ny} {nz}\n"))

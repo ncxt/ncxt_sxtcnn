@@ -1,18 +1,18 @@
 import numpy as np
+import hashlib
 import os
-from functools import reduce
-from math import ceil
-import torch
 from tqdm import trange, tnrange
-from scipy.ndimage.filters import maximum_filter
+from tqdm import tqdm, tqdm_notebook
+import torch
+import logging
 
 
 def isnotebook():
     try:
         shell = get_ipython().__class__.__name__
-        if shell == 'ZMQInteractiveShell':
+        if shell == "ZMQInteractiveShell":
             return True  # Jupyter notebook or qtconsole
-        elif shell == 'TerminalInteractiveShell':
+        elif shell == "TerminalInteractiveShell":
             return False  # Terminal running IPython
         else:
             return False  # Other type (?)
@@ -25,61 +25,55 @@ def rangebar(n):
     return rangefunc(n)
 
 
-def ensure_path(file_path):
-    '''Ensure the folder exists for file path
-    
-    Arguments:
-        file_path {string} -- full path to file
-    '''
+def tqdm_bar(n):
+    barfunc = tqdm_notebook if isnotebook() else tqdm
+    return barfunc(n)
 
-    ensure_dir(os.path.dirname(file_path))
+
+def kfold(index, k, n_samples, random_seed=1):
+    random_idx = np.random.RandomState(random_seed).permutation(n_samples)
+    if not k:
+        return random_idx, random_idx
+
+    assert index < k, "Index must be less then k"
+    assert k > 1, "Fold k must be either larger than 1 or 0 (duplicates all)"
+
+    folds = np.array_split(random_idx, k)
+
+    valid = folds[index]
+    folds.pop(index)
+
+    train = [item for sublist in folds for item in sublist]
+    return train, valid
+
+
+def stablehash(*arglist):
+    identifier = (".").join([str(x) for x in arglist])
+    return int(hashlib.sha256(identifier.encode("utf-8")).hexdigest(), 16) % 2 ** 16
+
+
+def hashvars(obj):
+    varsdict = {"name": type(obj).__name__}
+    varsdict.update({k: v for k, v in vars(obj).items() if not k.startswith("_")})
+    return varsdict
+
+
+def path_not_empty(directory):
+    if os.path.isdir(directory):
+        # directory exists
+        if os.listdir(directory):
+            return True
+    return False
 
 
 def ensure_dir(directory):
-    '''Ensure the folder exists 
+    """Ensure the folder exists 
     
     Arguments:
         file_path {string} -- full path to file
-    '''
+    """
     if not os.path.exists(directory):
         os.makedirs(directory)
-
-
-# from https://stackoverflow.com/questions/8090229/resize-with-averaging-or-rebin-a-numpy-2d-array
-def bin_ndarray(ndarray, new_shape, operation='mean'):
-    """
-    Bins an ndarray in all axes based on the target shape, by summing or
-        averaging.
-
-    Number of output dimensions must match number of input dimensions and 
-        new axes must divide old ones.
-
-    Example
-    -------
-    >>> m = np.arange(0,100,1).reshape((10,10))
-    >>> n = bin_ndarray(m, new_shape=(5,5), operation='sum')
-    >>> print(n)
-
-    [[ 22  30  38  46  54]
-     [102 110 118 126 134]
-     [182 190 198 206 214]
-     [262 270 278 286 294]
-     [342 350 358 366 374]]
-
-    """
-    operation = operation.lower()
-    if not operation in ['sum', 'mean']:
-        raise ValueError("Operation not supported.")
-    if ndarray.ndim != len(new_shape):
-        raise ValueError("Shape mismatch: {} -> {}".format(
-            ndarray.shape, new_shape))
-    compression_pairs = [(d, c // d) for d, c in zip(new_shape, ndarray.shape)]
-    flattened = [l for p in compression_pairs for l in p]
-    ndarray = ndarray.reshape(flattened)
-    for i in range(len(new_shape)):
-        op = getattr(ndarray, operation)
-        ndarray = op(-1 * (i + 1))
-    return ndarray
 
 
 def get_slices(image):
@@ -87,91 +81,49 @@ def get_slices(image):
     return image[s0, :, :], image[:, s1, :], image[:, :, s2]
 
 
-def crop_to_tensor_shape(image, ref):
-    l_images = image.shape[-1]
-    l_ref = ref.shape[-1]
-    l_crop = (int)((l_images - l_ref) / 2)
-    #     print(f'crop l {l_crop}')
-    return image[:, :, l_crop:-l_crop, l_crop:-l_crop, l_crop:-l_crop]
+def confusion_matrix(a, b, labels):
+    n_labels = len(labels)
+    cfm = np.zeros((n_labels, n_labels), dtype=int)
+    for i, value_i in enumerate(labels):
+        for j, value_j in enumerate(labels):
+            sela = a == value_i
+            selb = b == value_j
+            cfm[i, j] = int(np.sum(sela * selb))
+    return cfm
 
 
-def pad_to_shape(image, shape):
-    ''' pad image to give shape '''
-    pad = [a - b for a, b in zip(shape, image.shape)]
-    return np.pad(image, ((0, pad[0]), (0, pad[1]), (0, pad[2])), 'constant')
+def gpuinfo(gpuid):
+    import subprocess
+
+    sp = subprocess.Popen(
+        ["nvidia-smi", "-q", "-i", str(gpuid), "-d", "MEMORY"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    out_str = sp.communicate()
+    out_list = out_str[0].decode("utf-8").split("BAR1", 1)[0].split("\n")
+    out_dict = {}
+    for item in out_list:
+        try:
+            key, val = item.split(":")
+            key, val = key.strip(), val.strip()
+            out_dict[key] = val
+        except:
+            pass
+    return out_dict
 
 
-def pad_to_div(image, div=4):
-    '''pad image woth zeroes si the size is divisibale by div    '''
-    div_shape = [div * ceil(x / div) for x in image.shape]
-    return pad_to_shape(image, div_shape)
+def getfreegpumem(id):
+    return int(gpuinfo(id)["Free"].replace("MiB", "").strip())
 
 
-def labels2prob(image):
-    n_labels = np.max(image) + 1
-    array_label = np.zeros((n_labels, *image.shape))
-    for label_index in range(n_labels):
-        array_label[label_index, :] = image == label_index
-    return array_label
+def getbestgpu():
+    freememlist = []
+    for gpu_id in range(torch.cuda.device_count()):
+        freemem = getfreegpumem(gpu_id)
+        logging.debug("GPU device %d has %d MiB left.", gpu_id, freemem)
+        freememlist.append(freemem)
+    idbest = freememlist.index(max(freememlist))
+    # print("--> GPU device %d was chosen" % idbest)
+    return idbest
 
-
-def prob2label_numpy(x):
-    x = np.array(x)
-    label = np.zeros(x.shape[-3:])
-    for n in range(x.shape[0]):
-        ind_lab = x[n, :] >= np.max(x, 0)
-        label[ind_lab] = n
-    return label
-
-
-def prob2label(x):
-    if isinstance(x, np.ndarray):
-        return prob2label_numpy(x)
-    if isinstance(x, torch.Tensor):
-        np_x = x.numpy()
-        return prob2label_numpy(np_x)
-    raise TypeError('argument should be a np.ndarray or torch.Tensor')
-
-
-def crop_to_shape(image, shape):
-    return image[:shape[0], :shape[1], :shape[2]]
-
-
-def window(shape, func, **kwargs):
-    vs = [func(l, **kwargs) for l in shape]
-    return reduce(np.multiply, np.ix_(*vs))
-
-
-def bin_ndarray_single(ndarray, binning):
-    bin_shape = [s // binning for s in ndarray.shape]
-    return bin_ndarray(ndarray, bin_shape)
-
-
-def bin_ndarray_mode(ndarray, binning):
-    prob = labels2prob(ndarray)
-    bin_shape = [s // binning for s in prob.shape]
-    bin_shape[0] = prob.shape[0]
-    bin_prob = bin_ndarray(prob, bin_shape)
-
-    return prob2label_numpy(bin_prob)
-
-
-def getCropLim(image, pad=64, th=0.01):
-    # print(image.shape)
-    num_el_0 = maximum_filter(np.sum(np.sum(image, 1), 1), 2 * pad + 1)
-    num_el_1 = maximum_filter(np.sum(np.sum(image, 0), 1), 2 * pad + 1)
-    num_el_2 = maximum_filter(np.sum(np.sum(image, 0), 0), 2 * pad + 1)
-
-    prof_list = [num_el_0, num_el_1, num_el_2]
-    count_lim = [th * np.max(x) for x in prof_list]
-
-    clims = [(np.min(np.where(p > c)), np.max(np.where(p > c)))
-             for p, c in zip(prof_list, count_lim)]
-
-    return clims
-
-
-def crop_to_nonzero(img, label, pad=1):
-    clim = getCropLim(label, pad=pad)
-    return img[clim[0][0]:clim[0][1], clim[1][0]:clim[1][1], clim[2][0]:clim[2]
-               [1]]

@@ -1,66 +1,133 @@
+"""
+various utilities for the cnn
+"""
+import itertools
+
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from .. import volumeblocks
-from scipy.signal.windows import triang
 from sklearn.metrics import confusion_matrix
-import itertools
-from .datasets import TorchList
-import matplotlib.pyplot as plt
 
 
-def plot_confusion_matrix(ax,
-                          cm,
-                          classes,
-                          normalize=True,
-                          title="Confusion matrix",
-                          cmap=plt.cm.Blues):
+class CFMMetrics:
+    def __init__(self, id, cfm):
+        self.id = id
+        self.cfm = cfm
+        self._tp = np.diag(cfm)
+        self._pred = np.sum(cfm, 0)
+        self._label = np.sum(cfm, 1)
+
+    def labeldice(self):
+        return 2 * self._tp / (self._pred + self._label)
+
+    def hamming_loss(self):
+        return (np.sum(self.cfm) - np.sum(np.diag(self.cfm))) / np.sum(self.cfm)
+
+    def f1_micro(self):
+        return 2 * np.sum(self._tp) / (np.sum(self._pred) + np.sum(self._label))
+
+    def f1_macro(self):
+        return np.mean(2 * self._tp / (self._label + self._pred))
+
+    def recall_micro(self):
+        return np.sum(self._tp) / np.sum(self._pred)
+
+    def recall_macro(self):
+        return np.mean(self._tp / self._pred)
+
+    def precision_micro(self):
+        return np.sum(self._tp) / np.sum(self._label)
+
+    def precision_macro(self):
+        return np.mean(self._tp / self._label)
+
+    def __str__(self):
+        header = f"CFMMetrics [{self.id}]\n" + "=" * 20
+        attributes = [getattr(self, f) for f in self.__dir__() if not f.startswith("_")]
+        metrics = [f"{f.__name__:<20}: {f():.3g}" for f in attributes if callable(f)]
+        return "\n".join([header] + metrics)
+
+
+def plot_confusion_matrix(
+    axis,
+    matrix,
+    classes,
+    normalize=True,
+    title="Confusion matrix",
+    cmap=plt.cm.get_cmap("Blues"),
+):
     """
     This function prints and plots the confusion matrix.
       Normalization can be applied by setting `normalize=True`.
     """
 
     if normalize:
-        cm = cm.astype("float") / cm.sum(axis=1)[:, np.newaxis]
+        matrix = matrix.astype("float") / matrix.sum(axis=1)[:, np.newaxis]
 
-    ax.imshow(cm, interpolation="nearest", cmap=cmap)
-    ax.set_title(title)
-    # plt.colorbar()
+    axis.imshow(matrix, interpolation="nearest", cmap=cmap)
+    axis.set_title(title)
     tick_marks = np.arange(len(classes))
-    ax.set_xticks(tick_marks)
-    ax.set_xticklabels(classes, rotation=45)
-    ax.set_yticks(tick_marks)
-    ax.set_yticklabels(classes)
+    axis.set_xticks(tick_marks)
+    axis.set_xticklabels(classes, rotation=45)
+    axis.set_yticks(tick_marks)
+    axis.set_yticklabels(classes)
 
     fmt = ".2f" if normalize else "d"
-    thresh = cm.max() / 2.0
-    for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
-        ax.text(
+    thresh = matrix.max() / 2.0
+    for i, j in itertools.product(range(matrix.shape[0]), range(matrix.shape[1])):
+        axis.text(
             j,
             i,
-            format(cm[i, j], fmt),
+            format(matrix[i, j], fmt),
             horizontalalignment="center",
-            color="white" if cm[i, j] > thresh else "black",
+            color="white" if matrix[i, j] > thresh else "black",
         )
 
-    ax.set_ylabel("True label")
-    ax.set_xlabel("Predicted label")
+    axis.set_ylabel("True label")
+    axis.set_xlabel("Predicted label")
 
 
 def confusion_matrix_metric(cfm, index, mode):
+    """extract metric from confusion amtrix
+
+    Arguments:
+        cfm {[type]} -- confusion matrix
+        index {int} -- index of label
+        mode {string} -- mode of metric (recall, precision,dice)
+
+    Raises:
+        ValueError: If passed mode is invalid   
+
+    Returns:
+        [float] -- Metric
+    """
     eps = 1e-6
 
-    if mode == 'recall':
+    if mode == "recall":
         return cfm[index, index] / (eps + np.sum(cfm[index, :]))
-    if mode == 'precision':
+    if mode == "precision":
         return cfm[index, index] / (eps + np.sum(cfm[:, index]))
-    if mode == 'dice':
-        return 2 * cfm[index, index] / (
-            eps + (np.sum(cfm[:, index])) + np.sum(cfm[index, :]))
+    if mode == "dice":
+        return (
+            2
+            * cfm[index, index]
+            / (eps + (np.sum(cfm[:, index])) + np.sum(cfm[index, :]))
+        )
 
     raise ValueError("mode must be precision, recall or dice")
 
 
-def model_confusion_matrix(model_out, labels, num_classes):
+def model_confusion_matrix(model_out, labels, num_classes, ignore_index=None):
+    """calculate confusion matric from model
+    
+    Arguments:
+        model_out {tensor} -- output from model
+        labels {tensor} -- reference
+        num_classes {int} -- number of classes
+    
+    Returns:
+        ndarray -- confusion matrix
+    """
     output_labels = torch.argmax(model_out, dim=1)
 
     if output_labels.is_cuda:
@@ -68,76 +135,13 @@ def model_confusion_matrix(model_out, labels, num_classes):
     if labels.is_cuda:
         labels = labels.cpu()
 
+    if ignore_index is not None:
+        output_labels[labels == ignore_index] = labels[labels == ignore_index]
+
     cfm = confusion_matrix(
         labels.numpy().ravel(),
         output_labels.numpy().ravel(),
-        labels=np.arange(num_classes))
+        labels=np.arange(num_classes),
+    )
     return cfm
 
-
-def model_features(image, model, gpu, binning, block_shape, batch_size):
-    print(f'running: features:')
-    print(f'   image {image.shape}')
-    print(f'   model {model.__class__}')
-    print(f'   model in{model.in_channels}')
-    print(f'   binning{binning} block_shape {block_shape}')
-
-    block_shape_big = [s * binning for s in block_shape]
-    sampling = 1.05
-    lac_blocks = volumeblocks.split(
-        image, block_shape_big, binning=binning, sampling=sampling)
-
-    n_blocks = len(lac_blocks)
-
-    print(
-        f"  {n_blocks} blocks , shape {lac_blocks[0].shape} dtype {lac_blocks[0].dtype}"
-    )
-
-    eval_loader = torch.utils.data.DataLoader(
-        TorchList(lac_blocks), batch_size=batch_size)
-
-    model.eval()
-    model_res = []
-    with torch.no_grad():
-        for sample_batched in eval_loader:
-            if gpu:
-                output = model.features(sample_batched.cuda()).cpu()
-            else:
-                output = model.features(sample_batched)
-            model_res.append(output.numpy())
-
-    output = np.concatenate(model_res, axis=0)
-
-    return volumeblocks.fuse(
-        output, image.shape, binning, sampling, windowfunc=triang)
-
-
-def apply_model(image, model, binning, block_shape, batch_size, sampling, gpu):
-    block_shape_big = [s * binning for s in block_shape]
-
-    lac_blocks = volumeblocks.split(
-        image, block_shape_big, binning=binning, sampling=sampling)
-
-    eval_loader = torch.utils.data.DataLoader(
-        TorchList(lac_blocks), batch_size=batch_size)
-
-    model.eval()
-    model_res = []
-    with torch.no_grad():
-        for sample_batched in eval_loader:
-            if gpu:
-                output = torch.softmax(
-                    model(sample_batched.cuda()), dim=1).cpu()
-            else:
-                output = torch.softmax(model(sample_batched), dim=1)
-            model_res.append(output.numpy())
-
-    output = np.concatenate(model_res, axis=0)
-    retval_shape = [model.num_classes] + list(image.shape)[-3:]
-
-    return volumeblocks.fuse(
-        output,
-        retval_shape,
-        binning=binning,
-        sampling=sampling,
-        windowfunc=triang)

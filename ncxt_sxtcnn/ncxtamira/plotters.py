@@ -68,6 +68,8 @@ def hex2rgb(hexstring):
 
 def make_overlay(lac, label, void=0, saturation=0.7, blend=0.6, colors=None):
     """ Make overlay image of lac and label """
+    if not isinstance(void, (list, tuple)):
+        void = [void]
 
     rgb_colors = [hex2rgb(h) for h in colors]
 
@@ -75,7 +77,7 @@ def make_overlay(lac, label, void=0, saturation=0.7, blend=0.6, colors=None):
     # Construct a colour image for the labels
     color_mask = np.dstack([img] * 3)
     # replace labels with color
-    labelindecies = [i for i in range(np.max(label) + 1) if i != void]
+    labelindecies = [i for i in range(np.max(label) + 1) if i not in void]
     for i in labelindecies:
         color_mask[label == i] = rgb_colors[i]
 
@@ -122,7 +124,13 @@ def plot_data(lac, label, name, key):
         "#17becf",
     ]
 
-    overlay_kwargs = {"saturation": 0.6, "blend": 0.6, "colors": colors}
+    void_idx = [v for k, v in key.items() if "void" in k]
+    overlay_kwargs = {
+        "void": void_idx,
+        "saturation": 0.6,
+        "blend": 0.6,
+        "colors": colors,
+    }
 
     slices_lac = get_middle_slices(lac)
     slices_label = get_middle_slices(label)
@@ -139,6 +147,8 @@ def plot_data(lac, label, name, key):
     im_colors = set()
     for image in slices_label:
         im_colors |= set(np.unique(image))
+    void_idx = [v for k, v in key.items() if "void" in k]
+    im_colors = [i for i in im_colors if i not in void_idx]
 
     legend_elements = [
         patches.Patch(

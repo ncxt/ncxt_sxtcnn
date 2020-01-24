@@ -3,7 +3,7 @@ from setuptools.command.build_ext import build_ext
 import sys
 import setuptools
 
-__version__ = '0.0.2'
+__version__ = "0.0.2"
 
 
 class get_pybind_include(object):
@@ -18,20 +18,21 @@ class get_pybind_include(object):
 
     def __str__(self):
         import pybind11
+
         return pybind11.get_include(self.user)
 
 
 ext_modules = [
     Extension(
-        '_blocks',
-        ['src/main.cpp'],
+        "_blocks",
+        ["src/main.cpp"],
         include_dirs=[
             # Path to pybind11 headers
             get_pybind_include(),
-            get_pybind_include(user=True)
+            get_pybind_include(user=True),
         ],
-        language='c++',
-    ),
+        language="c++",
+    )
 ]
 
 
@@ -62,8 +63,9 @@ def cpp_flag(compiler):
     elif has_flag(compiler, "-std=c++11"):
         return "-std=c++11"
     else:
-        raise RuntimeError("Unsupported compiler -- at least C++11 support "
-                           "is needed!")
+        raise RuntimeError(
+            "Unsupported compiler -- at least C++11 support " "is needed!"
+        )
 
 
 class BuildExt(build_ext):
@@ -78,14 +80,12 @@ class BuildExt(build_ext):
         ct = self.compiler.compiler_type
         opts = self.c_opts.get(ct, [])
         if ct == "unix":
-            opts.append(
-                '-DVERSION_INFO="%s"' % self.distribution.get_version())
+            opts.append('-DVERSION_INFO="%s"' % self.distribution.get_version())
             opts.append(cpp_flag(self.compiler))
             if has_flag(self.compiler, "-fvisibility=hidden"):
                 opts.append("-fvisibility=hidden")
         elif ct == "msvc":
-            opts.append(
-                '/DVERSION_INFO=\\"%s\\"' % self.distribution.get_version())
+            opts.append('/DVERSION_INFO=\\"%s\\"' % self.distribution.get_version())
         for ext in self.extensions:
             ext.extra_compile_args = opts
         build_ext.build_extensions(self)
@@ -94,17 +94,19 @@ class BuildExt(build_ext):
 try:
     import torch
 except ModuleNotFoundError:
-    raise ModuleNotFoundError('''
+    raise ModuleNotFoundError(
+        """
     This module PyTorch 
     Check for suitable local installation at 
     https://pytorch.org/get-started/locally/
-    ''')
+    """
+    )
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="sxtcnn",
+    name="ncxt_sxtcnn",
     version=__version__,
     author="Axel Ekman",
     author_email="axel.ekman@iki.fi",
@@ -117,8 +119,11 @@ setuptools.setup(
     cmdclass={"build_ext": BuildExt},
     zip_safe=False,
     install_requires=[
-        "pybind11>=2.2", 'numpy>=1.13.3', 'matplotlib>=3.0.3', 'scipy>=1.2.0',
-        'tqdm>=4.25.0'
+        "pybind11>=2.2",
+        "numpy>=1.13.3",
+        "matplotlib>=3.0.3",
+        "scipy>=1.2.0",
+        "tqdm>=4.25.0",
     ],
     classifiers=[
         "Programming Language :: Python :: 3",

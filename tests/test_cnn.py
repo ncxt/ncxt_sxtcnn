@@ -2,12 +2,12 @@ import unittest
 
 import ncxt_sxtcnn
 
-from ncxt_sxtcnn.sxtcnn.factory import SegFactory
-from ncxt_sxtcnn.sxtcnn.dataloaders import NCXTMockLoader
+from ncxt_sxtcnn.sxtcnn.loaders import MockLoader
 from ncxt_sxtcnn.sxtcnn.models import UNet3D
-from ncxt_sxtcnn.sxtcnn.datainitializers import RandomBlockProcessor
-from ncxt_sxtcnn.sxtcnn.datainitializers import SingleBlockProcessor
-from ncxt_sxtcnn.sxtcnn.sxt_cnn_wrapper import SXT_CNN_WRAPPER
+from ncxt_sxtcnn.sxtcnn.processors import RandomBlockProcessor
+from ncxt_sxtcnn.sxtcnn.processors import RandomSingleBlockProcessor
+from ncxt_sxtcnn.sxtcnn.criteria import CrossEntropyLoss
+from ncxt_sxtcnn.sxtcnn.sxtcnn import SXTCNN
 
 
 class TestCNN(unittest.TestCase):
@@ -15,60 +15,81 @@ class TestCNN(unittest.TestCase):
         self.n_labels = 3
         self.temp_wd = "__tempwd__/"
 
-        self.loader = NCXTMockLoader(shape=(3, 4, 5), labels=self.n_labels, length=3)
-        self.processor = SingleBlockProcessor(block_shape=(16, 16, 16))
+        self.loader = MockLoader(shape=(3, 4, 5), out_channels=self.n_labels, length=3)
+        self.processor = RandomSingleBlockProcessor(block_shape=(16, 16, 16))
+        self.criteria = CrossEntropyLoss()
 
-        self.params = {"name": f"test_devices", "working_directory": self.temp_wd}
+        self.params = {"cfm_step": 2}
 
         model = UNet3D(self.n_labels)
-        seg = SXT_CNN_WRAPPER(self.loader, model, self.processor, params=self.params)
-        seg.init_data(**{"train_idx": [0, 1], "test_idx": [2], "reset": True})
+        seg = SXTCNN(
+            self.loader,
+            self.processor,
+            model,
+            self.criteria,
+            working_directory=self.temp_wd,
+            conf=self.params,
+        )
+        seg.init_data([0, 1], [2])
 
     def test_devices(self):
         for device in ["cpu", "cuda"]:
             print(f" === {device} ===")
             model = UNet3D(self.n_labels)
-            params = {
-                "name": f"test_devices",
-                "device": device,
-                "working_directory": self.temp_wd,
-            }
-            seg = SXT_CNN_WRAPPER(self.loader, model, self.processor, params=params)
+            params = {"device": device}
+            seg = SXTCNN(
+                self.loader,
+                self.processor,
+                model,
+                self.criteria,
+                working_directory=self.temp_wd,
+                conf=params,
+            )
+            seg.init_data([0, 1], [2])
             seg.epoch_step()
 
     def test_pipe_cuda(self):
         model = UNet3D(self.n_labels)
-        params = {
-            "name": f"test_devices",
-            "device": "cuda",
-            "working_directory": self.temp_wd,
-        }
-        seg = SXT_CNN_WRAPPER(self.loader, model, self.processor, params=self.params)
+        params = {"device": "cuda"}
+        seg = SXTCNN(
+            self.loader,
+            self.processor,
+            model,
+            self.criteria,
+            working_directory=self.temp_wd,
+            conf=params,
+        )
+        seg.init_data([0, 1], [2])
         seg.run()
         seg.evaluate_sample(0, self.loader, plot=False)
-        seg.plot_example(0)
 
     def test_pipe_cpu(self):
         model = UNet3D(self.n_labels)
-        params = {
-            "name": f"test_devices",
-            "device": "cpu",
-            "working_directory": self.temp_wd,
-        }
-        seg = SXT_CNN_WRAPPER(self.loader, model, self.processor, params=self.params)
+        params = {"device": "cpu"}
+        seg = SXTCNN(
+            self.loader,
+            self.processor,
+            model,
+            self.criteria,
+            working_directory=self.temp_wd,
+            conf=params,
+        )
+        seg.init_data([0, 1], [2])
         seg.run()
         seg.evaluate_sample(0, self.loader, plot=False)
-        seg.plot_example(0)
 
     def test_set_device(self):
         model = UNet3D(self.n_labels)
-        params = {
-            "name": f"test_devices",
-            "device": "cpu",
-            "working_directory": self.temp_wd,
-        }
-        seg = SXT_CNN_WRAPPER(self.loader, model, self.processor, params=self.params)
-
+        params = {"device": "cpu"}
+        seg = SXTCNN(
+            self.loader,
+            self.processor,
+            model,
+            self.criteria,
+            working_directory=self.temp_wd,
+            conf=params,
+        )
+        seg.init_data([0, 1], [2])
         seg.epoch_step()
         seg.set_device("cuda:0")
         seg.epoch_step()

@@ -100,22 +100,26 @@ py::array_t<T> bin_volume(py::array_t<T, py::array::c_style | py::array::forceca
     int ny_binned = ny / binning;
     int nz_binned = nz / binning;
 
-    py::array_t<T> retval;
-    retval.resize({nx_binned, ny_binned, nz_binned});
+    py::array_t<T> retval({nx_binned, ny_binned, nz_binned});
     std::fill(retval.mutable_data(), retval.mutable_data() + retval.size(), 0.);
     auto data_out = retval.mutable_unchecked<3>();
 
     double scale = 1.0 / (binning * binning * binning);
-    for (int i = 0; i < nx; i++) {
-        for (int j = 0; j < ny; j++) {
-            for (int k = 0; k < nz; k++) {
-                int ib = i / binning;
-                int jb = j / binning;
-                int kb = k / binning;
-                data_out(ib, jb, kb) += scale * data(i, j, k);
+#pragma omp parallel for
+    for (int ib = 0; ib < nx_binned; ib++) {
+        for (int di = 0; di < binning; di++) {
+            for (int j = 0; j < ny; j++) {
+                for (int k = 0; k < nz; k++) {
+                    int i = binning * ib + di;
+                    int jb = j / binning;
+                    int kb = k / binning;
+                    data_out(ib, jb, kb) += data(i, j, k);
+                }
             }
         }
     }
+    std::transform(retval.mutable_data(), retval.mutable_data() + retval.size(),
+                   retval.mutable_data(), [scale](auto &c) { return c * scale; });
     return retval;
 }
 
@@ -132,12 +136,12 @@ py::array_t<T> bin_tensor(py::array_t<T, py::array::c_style | py::array::forceca
     int ny_binned = ny / binning;
     int nz_binned = nz / binning;
 
-    py::array_t<T> retval;
-    retval.resize({channels, nx_binned, ny_binned, nz_binned});
+    py::array_t<T> retval({channels, nx_binned, ny_binned, nz_binned});
     std::fill(retval.mutable_data(), retval.mutable_data() + retval.size(), 0.);
     auto data_out = retval.mutable_unchecked<4>();
 
     double scale = 1.0 / (binning * binning * binning);
+#pragma omp parallel for
     for (int ch = 0; ch < channels; ch++) {
         for (int i = 0; i < nx; i++) {
             for (int j = 0; j < ny; j++) {
@@ -145,11 +149,13 @@ py::array_t<T> bin_tensor(py::array_t<T, py::array::c_style | py::array::forceca
                     int ib = i / binning;
                     int jb = j / binning;
                     int kb = k / binning;
-                    data_out(ch, ib, jb, kb) += scale * data(ch, i, j, k);
+                    data_out(ch, ib, jb, kb) += data(ch, i, j, k);
                 }
             }
         }
     }
+    std::transform(retval.mutable_data(), retval.mutable_data() + retval.size(),
+                   retval.mutable_data(), [scale](auto &c) { return c * scale; });
     return retval;
 }
 
