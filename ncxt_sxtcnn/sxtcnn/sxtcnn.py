@@ -350,8 +350,11 @@ class SXTCNN:
 
     @property
     def _model_hash(self):
+        modelvars = hashvars(self.model)
+        _ = modelvars.pop('training')
+ 
         return stablehash(
-            type(self.criterion).__name__, hashvars(self.model), hashvars(self.settings)
+            type(self.criterion).__name__, modelvars, hashvars(self.settings)
         )
 
     @property
