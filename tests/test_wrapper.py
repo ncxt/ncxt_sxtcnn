@@ -40,12 +40,14 @@ class TestCNN(unittest.TestCase):
         self.seg.setup()
 
     def test_stable_hash_after_run(self):
+        self.seg.fold = 2
         path1 = self.seg.jsonpath
         _ = self.seg.kfold_result(2)
         path2 = self.seg.jsonpath
         self.assertEqual(path1, path2)
 
     def test_kfold0(self):
+        self.seg.fold = 0
         path1 = self.seg.jsonpath
         _ = self.seg.kfold_result(0)
         path2 = self.seg.jsonpath

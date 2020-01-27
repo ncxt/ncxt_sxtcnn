@@ -104,7 +104,7 @@ class Segmenter:
             self._settings = dict()
 
         self._folder = "c:\\Users\\axela\\Documents\\ncxtcnn_wd\\"
-        self._fold = 1
+        self._fold = 0
 
         self._loader = loader(
             self._loader_args["files"], *self._loader_args["features"]
@@ -115,6 +115,14 @@ class Segmenter:
 
         self._validation_metrics = None
         self._seg = None
+
+    @property
+    def fold(self):
+        return self._fold
+
+    @fold.setter
+    def fold(self, val):
+        self._fold = val
 
     @property
     def folder(self):

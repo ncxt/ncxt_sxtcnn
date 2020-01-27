@@ -86,6 +86,8 @@ class Settings:
                         f'Settings attribute "{key}" not a valid attribute.'
                     )
 
+        self._current_learning_rate =self.learning_rate
+
     @property
     def batch_size(self):
         return self._batch_size
@@ -373,7 +375,7 @@ class SXTCNN:
         self.model.to(self.device)
         self.optimizer = torch.optim.Adam(
             self.model.parameters(),
-            lr=self.settings.learning_rate,
+            lr=self.settings._current_learning_rate,
             weight_decay=self.settings.weight_decay,
         )
 
@@ -478,7 +480,7 @@ class SXTCNN:
 
         for param_group in self.optimizer.param_groups:
             param_group["lr"] = (
-                learning_rate if learning_rate else self.settings.learning_rate
+                learning_rate if learning_rate else self.settings._current_learning_rate
             )
 
         t = rangebar(n_epoch)
@@ -514,9 +516,9 @@ class SXTCNN:
             x_past = np.mean(x[-window - 1 : -1])
 
             if ~(x_moving < x_past):
-                self.settings.learning_rate *= factor
+                self.settings._current_learning_rate *= factor
                 for param_group in self.optimizer.param_groups:
-                    param_group["lr"] = self.settings.learning_rate
+                    param_group["lr"] = self.settings._current_learning_rate
 
     def stopping_criterion(self):
         if self.epoch < 1:
