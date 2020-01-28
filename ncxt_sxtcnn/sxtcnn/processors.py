@@ -389,8 +389,11 @@ class PaddedRandomBlockProcessor(DataProcessor):
             data = sample["input"]
             labels = sample["target"]
 
+            self._sampler = DataSampler(np.maximum(block_shape_big, labels.shape))
+            self._sampler.set_seed(-1)
+
             blocks_x = volumeblocks.random_blocks(
-                data,
+                self._sampler.forward(data),
                 block_shape_big,
                 max_patches=self.n_blocks,
                 binning=self.binning,
@@ -398,7 +401,7 @@ class PaddedRandomBlockProcessor(DataProcessor):
             )
 
             blocks_y = volumeblocks.random_blocks_label(
-                labels,
+                self._sampler.forward(labels),
                 block_shape_big,
                 max_patches=self.n_blocks,
                 binning=self.binning,
