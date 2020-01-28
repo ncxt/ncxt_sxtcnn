@@ -74,21 +74,20 @@ class FeatureSelector:
     def __init__(self, key, *features):
 
         self.key = key.copy()
-        self.features = list(*features)
         self.material_dict = {"void": 0}
         self.cellmask = False
-        # print("*features", features)
-        # print("self.features", self.features)
-
-        if "*" in self.features:
-            self.cellmask = True
-            self.features.remove("*")
-            self.material_dict["cell"] = 1
+        self.features = []
+        for i, feature in enumerate(list(*features)):
+            if not isinstance(feature, (list, tuple)):
+                feature = [feature]
+            if "*" in feature:
+                self.cellmask = True
+                self.material_dict["cell"] = 1
+            else:
+                self.features.append(feature)
 
         for i, feature in enumerate(self.features):
             index = self.cellmask + 1 + i
-            if not isinstance(feature, (list, tuple)):
-                feature = [feature]
             for material in feature:
                 if material in self.key:
                     self.material_dict[material] = index
