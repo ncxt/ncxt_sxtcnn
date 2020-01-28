@@ -259,23 +259,23 @@ class Segmenter:
 
     def export_dict(self):
         retval = dict()
-        retval["Segmenter"] = arg_as_dict(self)
+        # retval["Segmenter"] = arg_as_dict(self)
         for name in ["loader", "processor", "model", "criterion"]:
             member = getattr(self, "_" + name)
             retval[name] = [type(member).__name__, arg_as_dict(member)]
         segdict = arg_as_dict(self._seg.settings)
-        retval["Settings"] = segdict
+        retval["settings"] = segdict
         return retval
 
     @classmethod
     def from_dict(cls, dictionary):
 
-        init_args = dictionary["Segmenter"]
+        # init_args = dictionary["Segmenter"]
         loader, loader_args = dictionary["loader"]
         processor, processor_args = dictionary["processor"]
         model, model_args = dictionary["model"]
         criterion, criterion_args = dictionary["criterion"]
-        settings_args = dictionary["Settings"]
+        settings_args = dictionary["settings"]
         model_args.pop("training", None)
         criterion_args.pop("training", None)
 
