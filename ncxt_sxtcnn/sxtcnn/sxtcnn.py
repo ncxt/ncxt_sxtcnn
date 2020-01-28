@@ -174,7 +174,7 @@ class TrainLogger:
         """
         Plot the loss function and CFM for the training
         """
-        x = self.x
+        x = self.x()
         _, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(13, 5))
         ax1.plot(x, self.train_res[0])
         ax1.plot(x, self.valid_res[0])
