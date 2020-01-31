@@ -8,6 +8,7 @@ import numpy as np
 
 from .sxtcnn import SXTCNN
 from .sxtcnn.utils import hashvars, stablehash
+import tempfile
 
 
 class NoDaemonProcess(multiprocessing.Process):
@@ -103,7 +104,7 @@ class Segmenter:
         else:
             self._settings = dict()
 
-        self._folder = "c:\\Users\\axela\\Documents\\ncxtcnn_wd\\"
+        self._folder = tempfile.gettempdir()
         self._fold = 0
 
         self._loader = loader(
