@@ -46,6 +46,7 @@ class TestCNN(unittest.TestCase):
                 conf=params,
             )
             seg.init_data([0, 1], [2])
+            seg.set_device()
             seg.epoch_step()
 
     def test_pipe_cuda(self):
@@ -90,6 +91,7 @@ class TestCNN(unittest.TestCase):
             conf=params,
         )
         seg.init_data([0, 1], [2])
+        seg.set_device()
         seg.epoch_step()
         seg.set_device("cuda:0")
         seg.epoch_step()

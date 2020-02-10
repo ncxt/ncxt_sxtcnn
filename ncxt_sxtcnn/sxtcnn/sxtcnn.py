@@ -86,7 +86,7 @@ class Settings:
                         f'Settings attribute "{key}" not a valid attribute.'
                     )
 
-        self._current_learning_rate =self.learning_rate
+        self._current_learning_rate = self.learning_rate
 
     @property
     def batch_size(self):
@@ -235,7 +235,14 @@ class SXTCNN:
     """
 
     def __init__(
-        self, loader, processor, model, criterion, working_directory, conf=None
+        self,
+        loader,
+        processor,
+        model,
+        criterion,
+        working_directory,
+        conf=None,
+        device=None,
     ):
 
         self.working_directory = Path(working_directory)
@@ -245,7 +252,7 @@ class SXTCNN:
         self.processor = processor
         self.model = model
         self.criterion = criterion
-        self.device = None
+        self.device = device
 
         if self.settings.ignore == -1:
             self.settings.ignore = self.model.num_classes
@@ -264,7 +271,16 @@ class SXTCNN:
 
         self.statedata = ["epoch", "train_idx", "valid_idx"]
         self.iter_callback = lambda x: None
-        self.set_device()
+        if self.device:
+            self.set_device()
+
+    @property
+    def data_folder_train(self):
+        return self._data_folder / "train"
+
+    @property
+    def data_folder_validation(self):
+        return self._data_folder / "validation"
 
     def logtest(self):
         print(f"logger from {__name__}")
@@ -351,8 +367,8 @@ class SXTCNN:
     @property
     def _model_hash(self):
         modelvars = hashvars(self.model)
-        _ = modelvars.pop('training')
- 
+        _ = modelvars.pop("training")
+
         return stablehash(
             type(self.criterion).__name__, modelvars, hashvars(self.settings)
         )
@@ -381,6 +397,7 @@ class SXTCNN:
             lr=self.settings._current_learning_rate,
             weight_decay=self.settings.weight_decay,
         )
+        return self.device
 
     def check_data_folder(self):
         for mode in ["train", "validation"]:
@@ -402,13 +419,13 @@ class SXTCNN:
             logger.info("Vsalidation: %s", self.valid_idx)
             self.processor.init_data(
                 self.loader,
-                folder=self._data_folder / "train",
+                folder=self.data_folder_train,
                 indices=self.train_idx,
                 seed=0,
             )
             self.processor.init_data(
                 self.loader,
-                folder=self._data_folder / "validation",
+                folder=self.data_folder_validation,
                 indices=self.valid_idx,
                 seed=1,
             )
@@ -766,6 +783,7 @@ class SXTCNN:
     def load_trained(self):
         print(f"loading model model {self._model_hash} {hashvars(self.model)}")
         try:
+            self.check_run()
             self.load()
             print(f"State at epoch {self.epoch} found")
         except FileNotFoundError as not_found:

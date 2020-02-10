@@ -35,7 +35,7 @@ class DataProcessor(ABC):
         """
 
 
-class RandomBlockProcessor(DataProcessor):
+class RandomBlockProcessor_old(DataProcessor):
     def __init__(self, block_shape=(32, 32, 32), binning=1, n_blocks=10):
         super().__init__()
         self.block_shape = tuple(block_shape)
@@ -336,7 +336,7 @@ class RandomSingleBlockProcessor(DataProcessor):
                 fileindex += 1
 
 
-class PaddedRandomBlockProcessor(DataProcessor):
+class RandomBlockProcessor(DataProcessor):
     def __init__(self, block_shape=(32, 32, 32), binning=1, n_blocks=10):
         super().__init__()
         self.block_shape = tuple(block_shape)
@@ -389,8 +389,9 @@ class PaddedRandomBlockProcessor(DataProcessor):
             data = sample["input"]
             labels = sample["target"]
 
+            seed = self._seed + ind if self._seed else np.random.randint(1000)
             self._sampler = DataSampler(np.maximum(block_shape_big, labels.shape))
-            self._sampler.set_seed(-1)
+            self._sampler.set_seed(seed)
 
             blocks_x = volumeblocks.random_blocks(
                 self._sampler.forward(data),
@@ -422,7 +423,7 @@ class PaddedRandomBlockProcessor(DataProcessor):
         seed = self._seed + index if self._seed else np.random.randint(1000)
 
         self._sampler = DataSampler(np.maximum(block_shape_big, labels.shape))
-        self._sampler.set_seed(-1)
+        self._sampler.set_seed(seed)
 
         blocks_x = volumeblocks.random_blocks(
             self._sampler.forward(data),

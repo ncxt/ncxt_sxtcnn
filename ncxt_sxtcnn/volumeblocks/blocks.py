@@ -175,6 +175,7 @@ def combine_tensor(blocklist, tensorshape, sampling=1.0, windowfunc=None):
 
     volumeshape = list(tensorshape[1:])
     block_shape = blocklist[0].shape[-3:]
+    print(f"volshape {volumeshape} block shape {block_shape}")
     limits = [
         divide(length, size, num_blocks(length, size, sampling))
         for length, size in zip(volumeshape, block_shape)
@@ -197,12 +198,14 @@ def combine_tensor(blocklist, tensorshape, sampling=1.0, windowfunc=None):
     else:
         window_block = 0.01 + window(block_shape, windowfunc)
         index = 0
+        print(f"window_bloc {window_block.shape}")
+        print(f"blocklist {blocklist[0].shape}")
         for i0 in limits[0]:
             slice_i = slice(i0, i0 + block_shape[0])
             for j0 in limits[1]:
                 slice_j = slice(j0, j0 + block_shape[1])
                 for k0 in limits[2]:
-                    slice_k = slice(k0, k0 + block_shape[1])
+                    slice_k = slice(k0, k0 + block_shape[2])
                     image[:, slice_i, slice_j, slice_k] += (
                         window_block * blocklist[index]
                     )

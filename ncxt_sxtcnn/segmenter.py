@@ -7,7 +7,7 @@ import multiprocessing
 import numpy as np
 
 from .sxtcnn import SXTCNN
-from .sxtcnn.utils import hashvars, stablehash
+from .sxtcnn.utils import hashvars, stablehash, getbestgpu
 import tempfile
 
 
@@ -106,6 +106,7 @@ class Segmenter:
 
         self._folder = tempfile.gettempdir()
         self._fold = 0
+        self._device = None
 
         self._loader = loader(
             self._loader_args["files"], *self._loader_args["features"]
@@ -132,6 +133,17 @@ class Segmenter:
     @folder.setter
     def folder(self, value):
         self._folder = value
+
+    @property
+    def device(self):
+        return self._device
+
+    @device.setter
+    def device(self, value):
+        if value == "cuda":
+            self._device = f"cuda:{getbestgpu()}"
+        else:
+            self._device = value
 
     @property
     def hash_variables(self):
@@ -162,6 +174,8 @@ class Segmenter:
             self._folder,
             self._settings,
         )
+        if self._device:
+            self._seg.set_device(self._device)
 
     @property
     def validation_metrics(self):
