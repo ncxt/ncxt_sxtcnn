@@ -495,7 +495,7 @@ class SXTCNN:
         # switch back to train, so saving works
         self.model.train()
 
-    def run(self, n_epoch=10, learning_rate=None):
+    def run(self, n_epoch=None, learning_rate=None):
         self.check_run()
 
         for param_group in self.optimizer.param_groups:
@@ -503,6 +503,8 @@ class SXTCNN:
                 learning_rate if learning_rate else self.settings._current_learning_rate
             )
 
+        if n_epoch is None:
+            n_epoch = self.settings.maximum_iterations
         t = rangebar(n_epoch)
         for _ in t:
             self.epoch_step()

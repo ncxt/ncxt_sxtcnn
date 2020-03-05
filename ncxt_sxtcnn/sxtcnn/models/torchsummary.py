@@ -41,16 +41,7 @@ def size_mb(model, input_size, device="cuda"):
         ):
             hooks.append(module.register_forward_hook(hook))
 
-    device = device.lower()
-    assert device in [
-        "cuda",
-        "cpu",
-    ], "Input device is not valid, please specify 'cuda' or 'cpu'"
-
-    if device == "cuda" and torch.cuda.is_available():
-        dtype = torch.cuda.FloatTensor
-    else:
-        dtype = torch.FloatTensor
+    dtype = torch.FloatTensor
 
     # check if there are multiple inputs to the network
     if isinstance(input_size[0], (list, tuple)):
@@ -66,7 +57,7 @@ def size_mb(model, input_size, device="cuda"):
     model.apply(register_hook)
     # make a forward pass
     # print(x.shape)
-    model(x)
+    model(x.to(device))
     # remove these hooks
     for h in hooks:
         h.remove()

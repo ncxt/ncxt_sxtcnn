@@ -1,8 +1,29 @@
+"""
+helper functions to display volumes using matplotlib
+"""
 import matplotlib.patches as patches
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
 from skimage import color
+
+COLORS = [
+    "#1f77b4",
+    "#ff7f0e",
+    "#2ca02c",
+    "#d62728",
+    "#9467bd",
+    "#8c564b",
+    "#e377c2",
+    "#bcbd22",
+    "#17becf",
+    "#1f77b4",
+    "#ff7f0e",
+    "#2ca02c",
+    "#d62728",
+    "#9467bd",
+    "#8c564b",
+]
 
 
 def getslice(data, dim, slicenr=None):
@@ -65,6 +86,8 @@ def hex2rgb(hexstring):
 
 def make_overlay(lac, label, void=0, saturation=0.7, blend=0.6, colors=None):
     """ Make overlay image of lac and label """
+    if not isinstance(void, (list, tuple)):
+        void = [void]
 
     rgb_colors = [hex2rgb(h) for h in colors]
 
@@ -72,7 +95,7 @@ def make_overlay(lac, label, void=0, saturation=0.7, blend=0.6, colors=None):
     # Construct a colour image for the labels
     color_mask = np.dstack([img] * 3)
     # replace labels with color
-    labelindecies = [i for i in range(np.max(label) + 1) if i != void]
+    labelindecies = [i for i in range(np.max(label) + 1) if i not in void]
     for i in labelindecies:
         color_mask[label == i] = rgb_colors[i]
 
@@ -166,4 +189,3 @@ def plot_data(lac, label, name, key):
     plt.suptitle(name)
 
     return
-

@@ -7,5 +7,5 @@ from . import utils
 from . import io
 from . import database
 
-from .database import NCXTDB
+# from .database import NCXTDB
 from .plotters import volshow
