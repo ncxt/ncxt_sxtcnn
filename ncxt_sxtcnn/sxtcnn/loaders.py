@@ -117,7 +117,7 @@ class FeatureSelector:
 
 
 class AmiraLoader:
-    def __init__(self, files, *features):
+    def __init__(self, files, features):
         self.files = files
         self.features = features
 
@@ -141,7 +141,7 @@ class AmiraLoader:
 
 
 class AmiraLoaderx100:
-    def __init__(self, files, *features):
+    def __init__(self, files, features):
         self.files = files
         self.features = features
         # todo assert features in CellProject
@@ -169,11 +169,14 @@ from scipy.ndimage import gaussian_filter
 
 
 class CascadeAmiraLoader:
-    def __init__(self, segmenter, files, *features):
+    def __init__(self, segmenter, files, features):
         self.files = files
         self.features = features
         self.sigma = 2
         self._segmenter = segmenter
+        self._loader = copy.deepcopy(segmenter.loader)
+        self._loader.files = files
+        self._loader.features = features
 
     def __len__(self):
         return len(self.files)
@@ -188,35 +191,41 @@ class CascadeAmiraLoader:
         return model_prediction
 
     def __getitem__(self, index):
-        sample = self._segmenter.loader[index]
+        sample = self._loader[index]
         sample["input"] = self.cascade_input(sample["input"])
         return sample
 
     def __call__(self, volume):
-        return self.cascade_input(self._segmenter.loader(volume))
+        return self.cascade_input(self._loader(volume))
+
+
+import copy
 
 
 class OneHotCascadeAmiraLoader:
-    def __init__(self, segmenter, files, *features):
+    def __init__(self, segmenter, files, features):
         self.files = files
         self.features = features
         self.sigma = 2
         self._segmenter = segmenter
+        self._loader = copy.deepcopy(segmenter.loader)
+        self._loader.files = files
+        self._loader.features = features
 
     def __len__(self):
         return len(self.files)
 
     def cascade_input(self, data):
         model_prediction = self._segmenter.model_prediction(data)
-        n_values = np.max(model_prediction) + 1
+        n_values = self._segmenter.model.num_classes
         onehot = np.transpose(np.eye(n_values)[model_prediction], (3, 0, 1, 2))
         onehot[0] = data
         return onehot
 
     def __getitem__(self, index):
-        sample = self._segmenter.loader[index]
+        sample = self._loader[index]
         sample["input"] = self.cascade_input(sample["input"])
         return sample
 
     def __call__(self, volume):
-        return self.cascade_input(self._segmenter.loader(volume))
+        return self.cascade_input(self._loader(volume))

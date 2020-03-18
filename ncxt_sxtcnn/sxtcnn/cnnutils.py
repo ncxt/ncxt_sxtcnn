@@ -71,6 +71,8 @@ def plot_confusion_matrix(
     axis.set_xticklabels(classes, rotation=45)
     axis.set_yticks(tick_marks)
     axis.set_yticklabels(classes)
+    axis.set_xlim(-0.5, len(classes) - 0.5)
+    axis.set_ylim(-0.5, len(classes) - 0.5)
 
     fmt = ".2f" if normalize else "d"
     thresh = matrix.max() / 2.0

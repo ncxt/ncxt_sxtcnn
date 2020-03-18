@@ -337,11 +337,12 @@ class RandomSingleBlockProcessor(DataProcessor):
 
 
 class RandomBlockProcessor(DataProcessor):
-    def __init__(self, block_shape=(32, 32, 32), binning=1, n_blocks=10):
+    def __init__(self, block_shape=(32, 32, 32), binning=1, pad=0, n_blocks=10):
         super().__init__()
         self.block_shape = tuple(block_shape)
         self.binning = binning
         self.n_blocks = n_blocks
+        self.pad = pad
 
         self._sampling = 1.5
         self._loader = None
@@ -353,8 +354,9 @@ class RandomBlockProcessor(DataProcessor):
 
     def forward(self, data):
         block_shape_big = [s * self.binning for s in self.block_shape]
+        sampler_size = [d + self.pad for d in block_shape_big]
 
-        self._sampler = DataSampler(np.maximum(block_shape_big, data.shape[-3:]))
+        self._sampler = DataSampler(np.maximum(sampler_size, data.shape[-3:]))
         self._sampler.set_seed(-1)
 
         lac_blocks = volumeblocks.split(
@@ -382,6 +384,7 @@ class RandomBlockProcessor(DataProcessor):
         self.setloader(loader)
         self._seed = seed
         block_shape_big = [s * self.binning for s in self.block_shape]
+        sampler_size = [d + self.pad for d in block_shape_big]
 
         fileindex = 0
         for ind in tqdm_bar(indices):
@@ -390,7 +393,7 @@ class RandomBlockProcessor(DataProcessor):
             labels = sample["target"]
 
             seed = self._seed + ind if self._seed else np.random.randint(1000)
-            self._sampler = DataSampler(np.maximum(block_shape_big, labels.shape))
+            self._sampler = DataSampler(np.maximum(sampler_size, labels.shape))
             self._sampler.set_seed(seed)
 
             blocks_x = volumeblocks.random_blocks(

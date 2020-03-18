@@ -108,9 +108,10 @@ class Segmenter:
         self._fold = 0
         self._device = None
 
-        self._loader = loader(
-            self._loader_args["files"], *self._loader_args["features"]
-        )
+        # TODO: ignore as argument
+        self._criterion_args["ignore_index"] = self._model_args["num_classes"]
+
+        self._loader = loader(**self._loader_args)
         self._processor = processor(**self._processor_args)
         self._model = model(**self._model_args)
         self._criterion = criterion(**self._criterion_args)
