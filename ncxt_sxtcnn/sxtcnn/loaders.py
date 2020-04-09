@@ -118,8 +118,9 @@ class FeatureSelector:
 
 class AmiraLoader:
     def __init__(self, files, features):
+        assert isinstance(features, (list, tuple)), "Give features as list of lists"
         self.files = files
-        self.features = features
+        self.features = [f if isinstance(f, (list, tuple)) else [f] for f in features]
 
     def __len__(self):
         return len(self.files)
@@ -142,8 +143,10 @@ class AmiraLoader:
 
 class AmiraLoaderx100:
     def __init__(self, files, features):
+        assert isinstance(features, (list, tuple)), "Give features as list of lists"
         self.files = files
-        self.features = features
+        self.features = [f if isinstance(f, (list, tuple)) else [f] for f in features]
+
         # todo assert features in CellProject
 
     def __len__(self):
@@ -170,8 +173,10 @@ import ncxtutils
 
 class AmiraLoaderClahe:
     def __init__(self, files, features, block_shape=(32, 32, 32), clip_limit=0.01):
+        assert isinstance(features, (list, tuple)), "Give features as list of lists"
         self.files = files
-        self.features = features
+        self.features = [f if isinstance(f, (list, tuple)) else [f] for f in features]
+
         self.block_shape = block_shape
         self.clip_limit = clip_limit
 
