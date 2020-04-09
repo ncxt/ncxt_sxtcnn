@@ -94,7 +94,7 @@ class ConvBlock(nn.Module):
         else:
             self.conv = conv3x3x3(self.in_channels, self.out_channels)
 
-        if dropout is not None:
+        if dropout:
             self.dropout = nn.Dropout3d(p=dropout)
 
         if instancenorm:
@@ -225,7 +225,7 @@ class UNet3D(nn.Module):
         in_channels=1,
         depth=3,
         start_filts=32,
-        dropout=None,
+        dropout=0,
         instancenorm=False,
         dirichlet=False,
         up_mode="transpose",
@@ -370,4 +370,3 @@ if __name__ == "__main__":
         OUT = MODEL(TEST_TENSOR)
     else:
         MODEL.summary((1, L, L, L))
-

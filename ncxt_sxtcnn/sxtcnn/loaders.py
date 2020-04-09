@@ -165,6 +165,39 @@ class AmiraLoaderx100:
         return retval.reshape(1, *retval.shape)
 
 
+import ncxtutils
+
+
+class AmiraLoaderClahe:
+    def __init__(self, files, features, block_shape=(32, 32, 32), clip_limit=0.01):
+        self.files = files
+        self.features = features
+        self.block_shape = block_shape
+        self.clip_limit = clip_limit
+
+        # todo assert features in CellProject
+
+    def __len__(self):
+        return len(self.files)
+
+    def __getitem__(self, index):
+        data = ncxtamira.project.CellProject(self.files[index])
+        lac_input = ncxtutils.exposure.clahe_blocks(
+            data.lac, block_shape=self.block_shape, clip_limit=self.clip_limit
+        )
+        label_sel, key = FeatureSelector(data.key, self.features)(data.labels)
+
+        return {
+            "input": lac_input.reshape(1, *lac_input.shape),
+            "target": label_sel.astype(int),
+            "key": key,
+        }
+
+    def __call__(self, data):
+        retval = data.copy() * 100
+        return retval.reshape(1, *retval.shape)
+
+
 from scipy.ndimage import gaussian_filter
 
 

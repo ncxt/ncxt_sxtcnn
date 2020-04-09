@@ -33,6 +33,7 @@ from .utils import (
     stablehash,
     getbestgpu,
 )
+from .models.torchsummary import size_mb
 
 _COLORS = [
     "#1f77b4",
@@ -274,6 +275,15 @@ class SXTCNN:
         if self.device:
             self.set_device()
 
+        self._model_size = None
+
+    @property
+    def model_size(self):
+        if not self._model_size:
+            block_shape = (self.model.in_channels, *self.processor.block_shape)
+            self._model_size = size_mb(self.model, block_shape, device=self.device)
+        return self._model_size
+
     @property
     def data_folder_train(self):
         return self._data_folder / "train"
@@ -495,7 +505,7 @@ class SXTCNN:
         # switch back to train, so saving works
         self.model.train()
 
-    def run(self, n_epoch=None, learning_rate=None):
+    def run(self, n_epoch=None, learning_rate=None, show_progress=True):
         self.check_run()
 
         for param_group in self.optimizer.param_groups:
@@ -505,7 +515,8 @@ class SXTCNN:
 
         if n_epoch is None:
             n_epoch = self.settings.maximum_iterations
-        t = rangebar(n_epoch)
+
+        t = rangebar(n_epoch) if show_progress else range(n_epoch)
         for _ in t:
             self.epoch_step()
             self.save_if_best()
@@ -515,9 +526,10 @@ class SXTCNN:
             if self.stopping_criterion():
                 break
 
-            t.set_description(
-                f"loss ({self.logger.train_res[0][-1]:.1e}/{self.logger.valid_res[0][-1]:.1e})"
-            )
+            if show_progress:
+                t.set_description(
+                    f"loss ({self.logger.train_res[0][-1]:.1e}/{self.logger.valid_res[0][-1]:.1e})"
+                )
             self.iter_callback(self)
 
     def check_run(self):
@@ -796,4 +808,3 @@ class SXTCNN:
             print(f"model {self._model_hash} {hashvars(self.model)}")
             self.save()
             print(f"model {self._model_hash} {hashvars(self.model)}")
-
