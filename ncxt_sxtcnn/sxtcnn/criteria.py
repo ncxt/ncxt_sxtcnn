@@ -10,26 +10,25 @@ class DiceLoss(nn.Module):
         self.eps = 1e-6
 
     def forward(self, input, target):
-
         softmax = F.softmax(input, dim=1)
 
         encoded_target = softmax.detach() * 0
         if self.ignore_index is not None:
             mask = target == self.ignore_index
-            target = target.clone()
-            target[mask] = 0
-            encoded_target.scatter_(1, target.unsqueeze(1), 1)
+            target_clone = target.clone()
+            target_clone[mask] = 0
+            encoded_target.scatter_(1, target_clone.unsqueeze(1), 1)
             mask = mask.unsqueeze(1).expand_as(encoded_target)
             encoded_target[mask] = 0
-            softmax[mask] = 0
         else:
             encoded_target.scatter_(1, target.unsqueeze(1), 1)
 
         intersection = softmax * encoded_target
         numerator = intersection.sum(0).sum(1).sum(1).sum(1)
-        denominator = softmax.sum(0).sum(1).sum(1).sum(1) + encoded_target.sum(0).sum(
-            1
-        ).sum(1).sum(1)
+        denominator = softmax + encoded_target
+        if self.ignore_index is not None:
+            denominator[mask] = 0
+        denominator = denominator.sum(0).sum(1).sum(1).sum(1) + self.eps
 
         loss_per_channel = self.weight * (numerator / denominator)
 
@@ -50,12 +49,11 @@ class CrossEntropyLoss_DiceLoss(nn.Module):
         encoded_target = softmax.detach() * 0
         if self.ignore_index is not None:
             mask = target == self.ignore_index
-            target = target.clone()
-            target[mask] = 0
-            encoded_target.scatter_(1, target.unsqueeze(1), 1)
+            target_clone = target.clone()
+            target_clone[mask] = 0
+            encoded_target.scatter_(1, target_clone.unsqueeze(1), 1)
             mask = mask.unsqueeze(1).expand_as(encoded_target)
             encoded_target[mask] = 0
-
         else:
             encoded_target.scatter_(1, target.unsqueeze(1), 1)
 
@@ -84,4 +82,3 @@ class CrossEntropyLoss(nn.Module):
 
     def forward(self, input, target):
         return self.celoss(input, target)
-

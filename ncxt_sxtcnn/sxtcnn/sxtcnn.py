@@ -613,7 +613,7 @@ class SXTCNN:
     def __call__(self, data):
         return self.model_prediction(self.loader(data))
 
-    def show_training_data(self, index=0, mode="train"):
+    def get_training_data(self, index=0, mode="train"):
         assert mode in [
             "train",
             "validation",
@@ -634,6 +634,15 @@ class SXTCNN:
         labels = labels.cpu().numpy()[0]
         output_label = torch.argmax(output, dim=1).cpu().numpy()[0]
         output = output.cpu().numpy()[0]
+        return inputs, labels, output_label, output
+
+    def show_training_data(self, index=0, mode="train"):
+        assert mode in [
+            "train",
+            "validation",
+        ], "Valid modes are 'train' and 'validation'"
+
+        inputs, labels, output_label, output = self.get_training_data(index, mode)
 
         images = []
         names = []
@@ -740,11 +749,14 @@ class SXTCNN:
         data = sample["input"]
         target = sample["target"]
         model_prediction = self.model_prediction(data)
-        model_prediction[target == self.settings.ignore] = target[
+
+        model_prediction_masked = np.copy(model_prediction)
+
+        model_prediction_masked[target == self.settings.ignore] = target[
             target == self.settings.ignore
         ]
         labels = np.arange(self.model.num_classes)
-        cnf_matrix = confusion_matrix(target, model_prediction, labels=labels)
+        cnf_matrix = confusion_matrix(target, model_prediction_masked, labels=labels)
 
         if plot == False:
             return cnf_matrix
