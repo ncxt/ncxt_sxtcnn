@@ -9,6 +9,7 @@ import numpy as np
 from .sxtcnn import SXTCNN
 from .sxtcnn.utils import hashvars, stablehash, getbestgpu
 import tempfile
+from pathlib import Path
 
 
 class NoDaemonProcess(multiprocessing.Process):
@@ -104,7 +105,7 @@ class Segmenter:
         else:
             self._settings = dict()
 
-        self._folder = tempfile.gettempdir()
+        self._folder = Path(tempfile.gettempdir())
         self._fold = 0
         self._device = None
 
@@ -133,7 +134,7 @@ class Segmenter:
 
     @folder.setter
     def folder(self, value):
-        self._folder = value
+        self._folder = Path(value)
 
     @property
     def device(self):
@@ -261,7 +262,7 @@ class Segmenter:
 
     @property
     def jsonpath(self):
-        return self._folder + f"segmenter_{self.hash}_{self._fold}.json"
+        return self._folder / f"segmenter_{self.hash}_{self._fold}.json"
 
     def kfold_result(self, kfold):
         self._fold = kfold
@@ -314,4 +315,3 @@ class Segmenter:
         with open(filename, "r") as read_file:
             jsondict = json.load(read_file)
             return cls.from_dict(jsondict)
-
