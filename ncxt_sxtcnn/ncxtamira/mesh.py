@@ -116,11 +116,19 @@ class AmiraMesh:
         self.parameters = dict()
 
     def loadmesh(self, headeronly=False):
+        tested = [
+            "# AmiraMesh BINARY-LITTLE-ENDIAN 2.1",
+            "# AmiraMesh BINARY-LITTLE-ENDIAN 3.0",
+        ]
+
         msg = f"loadmesh, headeronly {headeronly}"
         LOGGER.info(msg)
 
         with open(self.filepath, mode="rb") as fileobj:
             binaryline = fileobj.readline()
+            assert (
+                binaryline.decode("utf-8").strip() in tested
+            ), f"File format \n{binaryline}\nnot supported"
             count = 0
             while binaryline != b"# Data section follows\n" and binaryline:
                 try:
@@ -196,7 +204,7 @@ class AmiraMesh:
                 arr.shape = lattice_shape[2], lattice_shape[1], lattice_shape[0]
                 # arr = np.swapaxes(arr, 0, 2)
 
-                self.arrays[bytedata_id] = arr
+                self.arrays[bytedata_id] = np.array(arr, dtype=arr.dtype)
         return self
 
     def add_lattice(self, line):

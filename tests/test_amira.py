@@ -37,7 +37,7 @@ class TestLoad(unittest.TestCase):
     def test_template(self):
         project = ncxt_sxtcnn.ncxtamira.loadproject("data/ver63/template.hx")
 
-        template = ncxt_sxtcnn.ncxtamira.AmiraTemplate(
+        template = ncxt_sxtcnn.ncxtamira.AmiraCell(
             project.lac, project.labels, project.key, name="__temp__"
         )
         template.export("_temp/")

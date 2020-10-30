@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import ncxtamira
 import numpy as np
 import pandas as pd
-from ncxtamira import AmiraProject, CellProject
+from ncxtamira import AmiraCell
 from .plotters import make_overlay, get_middle_slices
 from .plotters import COLORS
 import matplotlib.patches as patches
@@ -18,10 +18,10 @@ from .sxtcnn.utils import rangebar, ensure_dir
 
 
 class Record:
-    def __init__(self, hxpath):
+    def __init__(self, hxpath, sanitize):
         self._hxpath = Path(hxpath)
 
-        p = ncxtamira.CellProject(hxpath)
+        p = ncxtamira.AmiraCell.from_hx(hxpath, sanitize=sanitize)
         self._key = p.key
 
         self.project = self._hxpath.parent.stem
@@ -67,20 +67,20 @@ def record_overlaydata(project, datapath, reset=False):
 
         np.save(datapath, [overlay_images, slices_label, project.key])
 
-    return np.load(datapath)
+    return np.load(datapath, allow_pickle=True)
 
 
 class AmiraDatabase:
-    def __init__(self, folder=None):
+    def __init__(self, folder=None, sanitize=False):
         self._records = []
         self.folder = folder
-        print(folder)
+        self.sanitize = sanitize
         if folder:
             self.add_folder(folder)
 
     def add(self, path):
         try:
-            self._records.append(Record(path))
+            self._records.append(Record(path, self.sanitize))
         except:
             print(f"Cannot add record at {path}")
             raise
@@ -100,28 +100,26 @@ class AmiraDatabase:
         return df
 
     def __getitem__(self, index):
-        return CellProject(self._records[index]._hxpath)
+        return AmiraCell.from_hx(self._records[index]._hxpath, sanitize=self.sanitize)
 
     def __len__(self):
         return len(self._records)
 
-    def generate_preview(self, raw=False, reset=False):
-        for index in rangebar(len(self._records)):
+    def generate_preview(self, sanitize=False, reset=False):
+        for index in trange_wrapper(len(self._records)):
             hxpath = self._records[index]._hxpath
-            project = AmiraProject(hxpath) if raw else CellProject(hxpath)
+            project = AmiraCell.from_hx(hxpath, sanitize=self.sanitize)
             datapath = Path(self.folder) / "__snapshots__"
-            datapath = (
-                datapath / (project.stem + "_raw") if raw else datapath / project.stem
-            ).with_suffix(".npy")
+            datapath = (datapath / (project.name + f"_s{sanitize}")).with_suffix(".npy")
             _ = record_overlaydata(project, datapath, reset)
 
-    def preview(self, index, raw=False):
+    def preview(self, index):
         hxpath = self._records[index]._hxpath
-        project = AmiraProject(hxpath) if raw else CellProject(hxpath)
+        project = AmiraCell.from_hx(hxpath, sanitize=self.sanitize)
         datapath = Path(self.folder) / "__snapshots__"
-        datapath = (
-            datapath / (project.stem + "_raw") if raw else datapath / project.stem
-        ).with_suffix(".npy")
+        datapath = (datapath / (project.name + f"_s{self.sanitize}")).with_suffix(
+            ".npy"
+        )
 
         overlay_images, slices_label, key = record_overlaydata(project, datapath)
 

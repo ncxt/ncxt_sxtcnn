@@ -14,5 +14,7 @@ LOGGER = logging.getLogger(__name__)
 from .read_write_mrc import read_mrc, write_mrc
 
 from .io import loadfloat, loadlabel, loadproject
-from .project import AmiraTemplate, AmiraProject, CellProject
+from .project import AmiraProject, AmiraCell
 from . import plotters
+
+from . import organelles

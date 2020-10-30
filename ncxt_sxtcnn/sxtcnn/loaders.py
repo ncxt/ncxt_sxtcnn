@@ -82,7 +82,7 @@ class FeatureSelector:
                 feature = [feature]
             if "*" in feature:
                 self.cellmask = True
-                self.material_dict["cell"] = 1
+                self.material_dict["wildcard"] = 1
             else:
                 self.features.append(feature)
 
@@ -105,7 +105,7 @@ class FeatureSelector:
             else np.zeros(image.shape, dtype=int)
         )
         for k, v in self.material_dict.items():
-            if k not in ["void", "cell"]:
+            if k not in ["void", "wildcard"]:
                 retlabel[image == self.key[k]] = v
 
         if np.sum(ignore_mask):
@@ -126,7 +126,7 @@ class AmiraLoader:
         return len(self.files)
 
     def __getitem__(self, index):
-        data = ncxtamira.project.CellProject(self.files[index])
+        data = ncxtamira.project.AmiraCell.from_hx(self.files[index])
         lac_input = data.lac
         label_sel, key = FeatureSelector(data.key, self.features)(data.labels)
 
@@ -153,7 +153,7 @@ class AmiraLoaderx100:
         return len(self.files)
 
     def __getitem__(self, index):
-        data = ncxtamira.project.CellProject(self.files[index])
+        data = ncxtamira.project.AmiraCell.from_hx(self.files[index])
         lac_input = data.lac * 100
         label_sel, key = FeatureSelector(data.key, self.features)(data.labels)
 
@@ -186,7 +186,7 @@ class AmiraLoaderClahe:
         return len(self.files)
 
     def __getitem__(self, index):
-        data = ncxtamira.project.CellProject(self.files[index])
+        data = ncxtamira.project.AmiraCell.from_hx(self.files[index])
         lac_input = ncxtutils.exposure.clahe_blocks(
             data.lac, block_shape=self.block_shape, clip_limit=self.clip_limit
         )

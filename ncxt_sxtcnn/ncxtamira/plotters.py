@@ -79,7 +79,7 @@ def make_overlay(lac, label, void=0, saturation=0.7, blend=0.6, colors=None):
     # replace labels with color
     labelindecies = [i for i in range(np.max(label) + 1) if i not in void]
     for i in labelindecies:
-        color_mask[label == i] = rgb_colors[i]
+        color_mask[label == i] = rgb_colors[i % len(colors)]
 
     # Convert the color mask to Hue Saturation Value (HSV)
     color_mask_hsv = color.rgb2hsv(color_mask)

@@ -2,11 +2,17 @@ from fuzzywuzzy import process
 from fuzzywuzzy import fuzz
 from . import LOGGER
 
+
+
+
+
+
 ORGANELLEDICT = {
     "void": "void",
     "exterior": "void",
     "capillary": "void",
     "bead": "void",
+    "buffer": "buffer",
     "nucleolus": "nucleolus",
     "nucleus": "nucleus",
     # "nuc": "nucleus",

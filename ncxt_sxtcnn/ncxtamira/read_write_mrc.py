@@ -21,6 +21,7 @@ def read_mrc(filename):
         3
     ]  # 0: 8-bit signed, 1:16-bit signed, 2: 32-bit float, 6: unsigned 16-bit (non-std)
     # print("Imagetype = {}".format(imagetype ))
+
     if imagetype == 0:
         imtype = "b"
     elif imagetype == 1:
@@ -30,6 +31,8 @@ def read_mrc(filename):
     elif imagetype == 6:
         imtype = "H"
     else:
+        imtype = "H"
+        print(f"Unknown imagetype {imagetype}")
         type = "unknown"  # should put a fail here
 
     num_voxels = dim[0] * dim[1] * dim[2]
