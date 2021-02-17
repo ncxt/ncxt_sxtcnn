@@ -17,6 +17,9 @@ class TrainBlocks(Dataset):
         # print(f'folder has {self.length} items')
 
     def __getitem__(self, index):
+        if index >= self.__len__():
+            raise IndexError("list index out of range")
+
         data = np.load(self.path / f"data{index}.npy", allow_pickle=True).item()
         x = data["x"]
         y = data["y"]

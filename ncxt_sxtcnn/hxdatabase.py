@@ -3,15 +3,15 @@ from ncxt_sxtcnn.database import AmiraDatabase
 
 
 class Database:
-    def __init__(self, folder="y:\\Axel\\AmiraProjects\\Database\\"):
+    def __init__(self, folder, **kwargs):
         self.folder = folder
-        self.db = AmiraDatabase(folder)
+        self.db = AmiraDatabase(folder, **kwargs)
 
     def dataframe(self):
         return self.db.dataframe()
 
     def __getitem__(self, index):
-        return self.db._records[index]._hxpath
+        return self.db._records[index].hxpath
 
     def dataframe_sel(self, *args):
         df = self.dataframe()

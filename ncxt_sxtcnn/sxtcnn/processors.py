@@ -178,6 +178,8 @@ class DataSampler:
         self._seed = seed
 
     def data_slices(self):
+        # print(f"self shape {self._shape} roi {self.roi_shape}")
+
         valid_length = np.minimum(self.roi_shape, self._shape)
         input_offset = [max(0, s - l) for l, s in zip(valid_length, self._shape)]
         out_offset = [max(0, s - l) for l, s in zip(valid_length, self.roi_shape)]
@@ -198,6 +200,7 @@ class DataSampler:
         slices_out = tuple(
             [slice(off, off + l) for off, l in zip(out_offset, valid_length)]
         )
+        # print(f"Seed = {self._seed} offset = {input_offset} {out_offset}")
 
         return slices_inp, slices_out
 
@@ -334,6 +337,125 @@ class RandomSingleBlockProcessor(DataProcessor):
                 data_dict = {"x": x, "y": y}
                 np.save(folder / f"data{fileindex}", data_dict)
                 fileindex += 1
+
+
+class NonZeroSplitProcessor(DataProcessor):
+    def __init__(
+        self,
+        block_shape=(32, 32, 32),
+        binning=1,
+        pad=0,
+        sampling=1.1,
+        rel_threshold=0.1,
+    ):
+        super().__init__()
+        self.block_shape = tuple(block_shape)
+        self.binning = binning
+        self.pad = pad
+        self.sampling = sampling
+        self.rel_threshold = rel_threshold
+
+        self._sampling = 1.5
+        self._loader = None
+        self._seed = None
+        self._sampler = None
+
+    def setloader(self, loader):
+        self._loader = loader
+
+    def forward(self, data):
+        block_shape_big = [s * self.binning for s in self.block_shape]
+        sampler_size = [d + self.pad for d in block_shape_big]
+
+        self._sampler = DataSampler(np.maximum(sampler_size, data.shape[-3:]))
+        self._sampler.set_seed(-1)
+
+        lac_blocks = volumeblocks.split(
+            self._sampler.forward(data),
+            block_shape_big,
+            binning=self.binning,
+            sampling=self._sampling,
+        )
+        return lac_blocks
+
+    def backward(self, data):
+        ret_dim = data.shape[1]
+        retval_shape = [ret_dim] + list(self._sampler.roi_shape)
+        return self._sampler.backward(
+            volumeblocks.fuse(
+                data,
+                retval_shape,
+                binning=self.binning,
+                sampling=self._sampling,
+                windowfunc=triang,
+            )
+        )
+
+    def get_data(self, index, seed):
+
+        sample = self._loader[index]
+        data = sample["input"]
+        labels = sample["target"]
+
+        block_shape_big = [s * self.binning for s in self.block_shape]
+        sampler_size = [d + self.pad for d in block_shape_big]
+        data_size = [d + self.pad for d in labels.shape]
+
+        self._sampler = DataSampler(np.maximum(sampler_size, data_size))
+        self._sampler.set_seed(seed)
+
+        blocks_x = volumeblocks.split(
+            self._sampler.forward(data),
+            block_shape_big,
+            binning=self.binning,
+            sampling=self.sampling,
+        )
+
+        blocks_y = volumeblocks.split_label(
+            self._sampler.forward(labels),
+            block_shape_big,
+            binning=self.binning,
+            sampling=self.sampling,
+        )
+        nonzero = [np.sum(v > 0) for v in blocks_y]
+        labelled = [np.prod(v.shape) for v in blocks_y]
+        print(nonzero[:5])
+        print(labelled[:5])
+
+        if sample["key"].get("ignore"):
+            ignore_val = sample["key"]["ignore"]
+            nonzero = [np.sum((v > 0) * (v != ignore_val)) for v in blocks_y]
+            labelled = [np.sum(v != ignore_val) for v in blocks_y]
+            print(nonzero[:5])
+            print(labelled[:5])
+
+        ind = [
+            i
+            for i, n in enumerate(zip(nonzero, labelled))
+            if n[0] / n[1] > self.rel_threshold
+        ]
+        print(
+            f"Split has {len(blocks_y)} blocks  of shape {blocks_y[0].shape} of which {len(ind)} are nonzero in volume {labels.shape}"
+        )
+        return [blocks_x[i] for i in ind], [blocks_y[i] for i in ind]
+
+    def init_data(self, loader, folder, indices, seed):
+        self.setloader(loader)
+        self._seed = seed
+
+        fileindex = 0
+        for ind in tqdm_bar(indices):
+            seed = self._seed + ind if self._seed else np.random.randint(1000)
+            blocks_x, blocks_y = self.get_data(ind, seed)
+
+            for bx, by in zip(blocks_x, blocks_y):
+                data_dict = {"x": bx, "y": by}
+                np.save(folder / f"data{fileindex}", data_dict)
+                fileindex += 1
+
+    def __getitem__(self, index):
+        seed = self._seed + index if self._seed else np.random.randint(1000)
+        return self.get_data(index, seed)
 
 
 class RandomBlockProcessor(DataProcessor):

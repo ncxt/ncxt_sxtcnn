@@ -14,18 +14,20 @@ from .plotters import make_overlay, get_middle_slices
 from .plotters import COLORS
 import matplotlib.patches as patches
 import matplotlib.gridspec as gridspec
-from .sxtcnn.utils import rangebar, ensure_dir
+from .sxtcnn.utils import ensure_path
+
+from tqdm.auto import tqdm
 
 
 class Record:
     def __init__(self, hxpath, sanitize):
-        self._hxpath = Path(hxpath)
+        self.hxpath = Path(hxpath)
 
         p = ncxtamira.AmiraCell.from_hx(hxpath, sanitize=sanitize)
         self._key = p.key
 
-        self.project = self._hxpath.parent.stem
-        self.sample = self._hxpath.stem
+        self.project = self.hxpath.parent.stem
+        self.sample = self.hxpath.stem
 
     def datarow(self):
         retval = dict()
@@ -63,7 +65,7 @@ def record_overlaydata(project, datapath, reset=False):
             make_overlay(a, b, **overlay_kwargs)
             for a, b, in zip(slices_lac, slices_label)
         ]
-        ensure_dir(datapath)
+        ensure_path(datapath)
 
         np.save(datapath, [overlay_images, slices_label, project.key])
 
@@ -71,9 +73,10 @@ def record_overlaydata(project, datapath, reset=False):
 
 
 class AmiraDatabase:
-    def __init__(self, folder=None, sanitize=False):
+    def __init__(self, folder=None, sanitize=False, wd=None):
         self._records = []
-        self.folder = folder
+        self.folder = Path(folder)
+        self.wd = Path(folder) if wd is None else Path(wd)
         self.sanitize = sanitize
         if folder:
             self.add_folder(folder)
@@ -100,28 +103,30 @@ class AmiraDatabase:
         return df
 
     def __getitem__(self, index):
-        return AmiraCell.from_hx(self._records[index]._hxpath, sanitize=self.sanitize)
+        if index >= self.__len__():
+            raise IndexError("list index out of range")
+        return AmiraCell.from_hx(self._records[index].hxpath, sanitize=self.sanitize)
 
     def __len__(self):
         return len(self._records)
 
-    def generate_preview(self, sanitize=False, reset=False):
-        for index in trange_wrapper(len(self._records)):
-            hxpath = self._records[index]._hxpath
+    def preview_path(self, name):
+        datapath = self.wd / "__snapshots__"
+        datapath = (datapath / (name + f"_s{self.sanitize}")).with_suffix(".npy")
+        return datapath
+
+    def generate_preview(self, reset=False):
+        for record in tqdm(self._records):
+            hxpath = record.hxpath
             project = AmiraCell.from_hx(hxpath, sanitize=self.sanitize)
-            datapath = Path(self.folder) / "__snapshots__"
-            datapath = (datapath / (project.name + f"_s{sanitize}")).with_suffix(".npy")
-            _ = record_overlaydata(project, datapath, reset)
+            _ = record_overlaydata(project, self.preview_path(project.name), reset)
 
     def preview(self, index):
-        hxpath = self._records[index]._hxpath
+        hxpath = self._records[index].hxpath
         project = AmiraCell.from_hx(hxpath, sanitize=self.sanitize)
-        datapath = Path(self.folder) / "__snapshots__"
-        datapath = (datapath / (project.name + f"_s{self.sanitize}")).with_suffix(
-            ".npy"
+        overlay_images, slices_label, key = record_overlaydata(
+            project, self.preview_path(project.name)
         )
-
-        overlay_images, slices_label, key = record_overlaydata(project, datapath)
 
         _ = plt.figure(figsize=(13, 5))
         axes = [plt.subplot(gsi) for gsi in gridspec.GridSpec(1, 4)]

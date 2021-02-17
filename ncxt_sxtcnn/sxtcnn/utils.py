@@ -76,6 +76,16 @@ def ensure_dir(directory):
         os.makedirs(directory)
 
 
+def ensure_path(file_path):
+    """Ensure the folder exists for file path
+
+    Arguments:
+        file_path {string} -- full path to file
+    """
+
+    ensure_dir(os.path.dirname(file_path))
+
+
 def get_slices(image):
     s0, s1, s2 = [int(s / 2) for s in image.shape]
     return image[s0, :, :], image[:, s1, :], image[:, :, s2]

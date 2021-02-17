@@ -197,6 +197,11 @@ class Segmenter:
         self._seg.load_trained()
         return self._seg
 
+    def data(self, fold, mode="train"):
+        self.setup()
+        self._seg.init_kfold(fold, self._fold)
+        return self._seg.train_blocks(mode)
+
     def eval_validation_metrics(self):
         self._validation_metrics = []
 

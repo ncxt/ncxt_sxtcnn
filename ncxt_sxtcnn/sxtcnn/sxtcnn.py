@@ -613,6 +613,14 @@ class SXTCNN:
     def __call__(self, data):
         return self.model_prediction(self.loader(data))
 
+    def train_blocks(self, mode="train",totorch=False):
+        assert mode in [
+            "train",
+            "validation",
+        ], "Valid modes are 'train' and 'validation'"
+        folder = self._data_folder / mode
+        return TrainBlocks(folder, totorch=totorch, random_flip=False)
+
     def get_training_data(self, index=0, mode="train"):
         assert mode in [
             "train",

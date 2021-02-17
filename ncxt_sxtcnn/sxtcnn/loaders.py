@@ -126,7 +126,7 @@ class AmiraLoader:
         return len(self.files)
 
     def __getitem__(self, index):
-        data = ncxtamira.project.AmiraCell.from_hx(self.files[index])
+        data = ncxtamira.AmiraCell.from_hx(self.files[index])
         lac_input = data.lac
         label_sel, key = FeatureSelector(data.key, self.features)(data.labels)
 
