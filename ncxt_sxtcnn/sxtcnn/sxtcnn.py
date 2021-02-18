@@ -50,8 +50,7 @@ _COLORS = [
 
 
 class Settings:
-    """Settings manager for the SXTCNN wrapper
-    """
+    """Settings manager for the SXTCNN wrapper"""
 
     def __init__(self, conf=None):
         """
@@ -232,8 +231,7 @@ def allvars(obj):
 
 
 class SXTCNN:
-    """CNN annotation using pytoprch
-    """
+    """CNN annotation using pytoprch"""
 
     def __init__(
         self,
@@ -388,8 +386,8 @@ class SXTCNN:
         return self.working_directory / f"data{self._data_hash}"
 
     def set_device(self, device=None):
-        """ Change current device and initialize optimizer
-        
+        """Change current device and initialize optimizer
+
         Keyword Arguments:
             device {string} -- Device can be either cpu, cuda or cuda:n (default: use current device)
         """
@@ -589,8 +587,7 @@ class SXTCNN:
         return self.processor.backward(np.concatenate(model_res, axis=0))
 
     def model_features(self, image):
-        """Return the last feature layer of the CNN before the classification layer
-        """
+        """Return the last feature layer of the CNN before the classification layer"""
         assert self.processor is not None, "model_features needs a defined processor"
 
         eval_loader = torch.utils.data.DataLoader(
@@ -613,7 +610,7 @@ class SXTCNN:
     def __call__(self, data):
         return self.model_prediction(self.loader(data))
 
-    def train_blocks(self, mode="train",totorch=False):
+    def train_blocks(self, mode="train", totorch=False):
         assert mode in [
             "train",
             "validation",

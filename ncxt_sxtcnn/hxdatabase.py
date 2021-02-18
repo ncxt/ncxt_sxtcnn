@@ -30,4 +30,3 @@ class Database:
         dfsel = self.dataframe_sel(*args)
         hxfiles = [str(self[i]) for i in dfsel.index]
         return hxfiles
-
