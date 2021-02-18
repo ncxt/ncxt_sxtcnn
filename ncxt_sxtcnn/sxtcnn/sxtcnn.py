@@ -69,7 +69,10 @@ class Settings:
         self.learning_rate_decay = 0.8
         self.max_without_change = 50
         self.maximum_iterations = 5
+        self.augment_linear = 0
+        self.augment_affine = 0
 
+        # undesrscore for members not hashed via properties
         self._batch_size = 4
         self._num_workers = 4
         self._reset = False
@@ -454,7 +457,12 @@ class SXTCNN:
         for step in ["train", "validation"]:
             folder = self._data_folder / step
             loader = torch.utils.data.DataLoader(
-                TrainBlocks(folder, random_flip=True),
+                TrainBlocks(
+                    folder,
+                    random_flip=True,
+                    augment_affine=self.settings.augment_affine,
+                    augment_linear=self.settings.augment_linear,
+                ),
                 batch_size=self.settings.batch_size,
                 num_workers=self.settings.num_workers,
             )
@@ -723,7 +731,7 @@ class SXTCNN:
         msg = [f"{m}: {val:.3f}" for m, val in zip(metrics, res)]
         plt.suptitle(msg)
 
-    def evaluate_training_data(self, index=0, mode="train"):
+    def evaluate_training_data(self, index=0, mode="train", augment=False):
         assert mode in [
             "train",
             "validation",
@@ -731,6 +739,13 @@ class SXTCNN:
 
         folder = self._data_folder / mode
         loader = TrainBlocks(folder, random_flip=False)
+        if augment:
+            loader = TrainBlocks(
+                folder,
+                random_flip=True,
+                augment_affine=self.settings.augment_affine,
+                augment_linear=self.settings.augment_linear,
+            )
 
         self.model.eval()
         with torch.no_grad():

@@ -96,10 +96,11 @@ class AmiraDatabase:
     def dataframe(self):
         df = pd.DataFrame([record.datarow() for record in self._records])
         cols = list(df)
-        cols.insert(0, cols.pop(cols.index("sample")))
-        cols.insert(0, cols.pop(cols.index("project")))
-        df = df.reindex(columns=cols)
-        df = df.replace(np.nan, "", regex=True)
+        if cols:
+            cols.insert(0, cols.pop(cols.index("sample")))
+            cols.insert(0, cols.pop(cols.index("project")))
+            df = df.reindex(columns=cols)
+            df = df.replace(np.nan, "", regex=True)
         return df
 
     def __getitem__(self, index):
@@ -168,4 +169,3 @@ class AmiraDatabase:
         )
 
         plt.suptitle(hxpath.stem)
-

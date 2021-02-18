@@ -117,16 +117,17 @@ class FeatureSelector:
 
 
 class AmiraLoader:
-    def __init__(self, files, features):
+    def __init__(self, files, features, sanitize=False):
         assert isinstance(features, (list, tuple)), "Give features as list of lists"
         self.files = files
         self.features = [f if isinstance(f, (list, tuple)) else [f] for f in features]
+        self.sanitize = sanitize
 
     def __len__(self):
         return len(self.files)
 
     def __getitem__(self, index):
-        data = ncxtamira.AmiraCell.from_hx(self.files[index])
+        data = ncxtamira.AmiraCell.from_hx(self.files[index], sanitize=self.sanitize)
         lac_input = data.lac
         label_sel, key = FeatureSelector(data.key, self.features)(data.labels)
 
@@ -142,10 +143,11 @@ class AmiraLoader:
 
 
 class AmiraLoaderx100:
-    def __init__(self, files, features):
+    def __init__(self, files, features, sanitize=False):
         assert isinstance(features, (list, tuple)), "Give features as list of lists"
         self.files = files
         self.features = [f if isinstance(f, (list, tuple)) else [f] for f in features]
+        self.sanitize = sanitize
 
         # todo assert features in CellProject
 
@@ -153,7 +155,7 @@ class AmiraLoaderx100:
         return len(self.files)
 
     def __getitem__(self, index):
-        data = ncxtamira.project.AmiraCell.from_hx(self.files[index])
+        data = ncxtamira.project.AmiraCell.from_hx(self.files[index], sanitize=self.sanitize)
         lac_input = data.lac * 100
         label_sel, key = FeatureSelector(data.key, self.features)(data.labels)
 
@@ -172,7 +174,9 @@ import ncxtutils
 
 
 class AmiraLoaderClahe:
-    def __init__(self, files, features, block_shape=(32, 32, 32), clip_limit=0.01):
+    def __init__(
+        self, files, features, sanitize=False, block_shape=(32, 32, 32), clip_limit=0.01
+    ):
         assert isinstance(features, (list, tuple)), "Give features as list of lists"
         self.files = files
         self.features = [f if isinstance(f, (list, tuple)) else [f] for f in features]

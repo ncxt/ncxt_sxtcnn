@@ -8,11 +8,15 @@ from torch.utils.data import Dataset
 
 
 class TrainBlocks(Dataset):
-    def __init__(self, path, totorch=True, random_flip=True):
+    def __init__(
+        self, path, totorch=True, random_flip=True, augment_affine=0, augment_linear=0
+    ):
         self.path = Path(path)
         self.length = len(os.listdir(path))
         self.totorch = totorch
         self.random_flip = random_flip
+        self.augment_affine = augment_affine
+        self.augment_linear = augment_linear
 
         # print(f'folder has {self.length} items')
 
@@ -31,6 +35,11 @@ class TrainBlocks(Dataset):
                 if random.choice([True, False]):
                     x = np.flip(x, axis=dimoffset + dim)
                     y = np.flip(y, axis=dim)
+
+        if self.augment_linear:
+            x *= 1 + (np.random.random() - 0.5) * self.augment_linear
+        if self.augment_affine:
+            x += (np.random.random() - 0.5) * self.augment_affine
 
         if self.totorch:
             torch_x = torch.from_numpy(x.astype("float32"))
