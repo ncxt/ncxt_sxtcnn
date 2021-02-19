@@ -16,11 +16,11 @@ else:
 class Conv3dDirichlet(nn.Module):
     def __init__(self, in_channels, out_channels, stride=1, bias=True, groups=1):
         """3x3x3 convolutional operator with dirichlet boundary condtions
-        
+
         Arguments:
             in_channels {int} -- number of input channels
             out_channels {int} -- number of output channels
-        
+
         Keyword Arguments:
             stride {int} -- Stride of the convolution (default: {1})
             bias {bool} -- [description] (default: {True})
@@ -181,7 +181,7 @@ class UpConv(nn.Module):
         )
 
     def forward(self, from_down, from_up):
-        """ Forward pass
+        """Forward pass
         Arguments:
             from_down: tensor from the encoder pathway
             from_up: upconv'd tensor from the decoder pathway
@@ -200,7 +200,7 @@ class UpConv(nn.Module):
 
 
 class UNet3D(nn.Module):
-    """ `UNet3D` class is based on https://arxiv.org/abs/1505.04597
+    """`UNet3D` class is based on https://arxiv.org/abs/1505.04597
 
     The U-Net is a convolutional encoder-decoder neural network.
     Contextual spatial information (from the decoding,
@@ -235,7 +235,7 @@ class UNet3D(nn.Module):
             in_channels: int, number of channels in the input tensor.
                 Default is 3 for RGB images.
             depth: int, number of MaxPools in the U-Net.
-            start_filts: int, number of convolutional filters for the 
+            start_filts: int, number of convolutional filters for the
                 first conv.
             up_mode: string, type of upconvolution. Choices: 'transpose'
                 for transpose convolution or 'upsample' for nearest neighbour
@@ -354,19 +354,42 @@ class UNet3D(nn.Module):
     def summary(self, shape):
         return summary(self, shape, device="cpu")
 
+    def receptive_fied(self, tensor):
+        with torch.no_grad():
+            # store params
+            base_params = dict(self.named_parameters())
+            stored_params = copy.deepcopy(base_params)
+            # test weights
+            for name_base, param_base in self.named_parameters():
+                if "bias" in str(name_base):
+                    base_params[name_base].data.copy_(param_base.data * 0)
+                if "weight" in str(name_base):
+                    base_params[name_base].data.copy_(param_base.data * 0 + 1)
+            retval = torch.abs(self.features(tensor)).sum(axis=0).sum(axis=0)
+            # restore params
+            for name_base, param_base in stored_params.items():
+                base_params[name_base].data.copy_(param_base.data)
+
+            return retval / torch.max(retval)
+
+
+import copy
 
 DEBUG = False
 if __name__ == "__main__":
-    DEBUG = True
+    DEBUG = False
     print(f"Testing debug {DEBUG}")
     """
     testing
     """
     L = 32
-    MODEL = UNet3D(5, in_channels=1, depth=3, start_filts=16)
+    MODEL = UNet3D(2, in_channels=1, depth=2, start_filts=16)
 
     if DEBUG:
         TEST_TENSOR = Variable(torch.FloatTensor(np.random.random((1, 1, L, L, L))))
         OUT = MODEL(TEST_TENSOR)
     else:
-        MODEL.summary((1, L, L, L))
+        # MODEL.summary((1, L, L, L))
+        TEST_TENSOR = Variable(torch.FloatTensor(np.random.random((1, 1, L, L, L))))
+        rf = MODEL.receptive_fied(TEST_TENSOR)
+        print(rf.shape)

@@ -14,6 +14,7 @@ class Database:
         return self.db._records[index].hxpath
 
     def dataframe_sel(self, *args):
+
         df = self.dataframe()
         if not len(df):
             return df

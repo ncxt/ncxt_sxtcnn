@@ -72,7 +72,6 @@ def feature_selector(image, keydict, features, cellmask=False):
 
 class FeatureSelector:
     def __init__(self, key, *features):
-
         self.key = key.copy()
         self.material_dict = {"void": 0}
         self.cellmask = False
@@ -155,7 +154,8 @@ class AmiraLoaderx100:
         return len(self.files)
 
     def __getitem__(self, index):
-        data = ncxtamira.project.AmiraCell.from_hx(self.files[index], sanitize=self.sanitize)
+
+        data = ncxtamira.AmiraCell.from_hx(self.files[index], sanitize=self.sanitize)
         lac_input = data.lac * 100
         label_sel, key = FeatureSelector(data.key, self.features)(data.labels)
 

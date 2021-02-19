@@ -761,6 +761,64 @@ class SXTCNN:
 
         self.plot_cfm_evaluation(inputs[0], labels, output_label)
 
+    def show_receptive_field(self, index=0, mode="train", augment=False):
+        assert mode in [
+            "train",
+            "validation",
+        ], "Valid modes are 'train' and 'validation'"
+
+        folder = self._data_folder / mode
+        loader = TrainBlocks(folder, random_flip=False)
+        if augment:
+            loader = TrainBlocks(
+                folder,
+                random_flip=True,
+                augment_affine=self.settings.augment_affine,
+                augment_linear=self.settings.augment_linear,
+            )
+
+        self.model.eval()
+        with torch.no_grad():
+            inputs, labels = loader[index]
+            labels = labels.long()
+            inputs = inputs.view(1, *inputs.shape).to(self.device)
+            labels = labels.view(1, *labels.shape).to(self.device)
+
+            tensor = torch.zeros_like(inputs)
+            r = [l // 2 for l in tensor.shape]
+            tensor[tuple(r)] = 1
+
+            rf = self.model.receptive_fied(tensor)
+
+        inputs = inputs.cpu().numpy()[0]
+        labels = labels.cpu().numpy()[0]
+        rf = rf.cpu().numpy()
+
+        print(inputs.shape)
+        print(labels.shape)
+        print(rf.shape)
+        imgs = [
+            *get_slices(inputs[0]),
+            *get_slices(labels),
+            *get_slices(inputs[0] * (rf > 0.5)),
+        ]
+
+        plt.figure(figsize=(13, 8))
+        gs1 = gridspec.GridSpec(3, 3)
+        gs1.update(left=0.05, right=0.55, wspace=0.05)
+        axis = [plt.subplot(g) for i, g in enumerate(gs1)]
+
+        gs2 = gridspec.GridSpec(1, 1)
+        gs2.update(left=0.60, right=0.98, hspace=0.05)
+
+        for i, (axes, image) in enumerate(zip(axis, imgs)):
+            if i == 1:
+                clim = (0, self.settings.ignore)
+            else:
+                clim = (np.percentile(inputs, 5), np.percentile(inputs, 97))
+            axes.imshow(image, clim=clim)
+            axes.axis("off")
+
     def evaluate_sample(self, index, loader=None, plot=False):
         if loader is None:
             loader = self.loader

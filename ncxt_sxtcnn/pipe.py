@@ -1,4 +1,5 @@
-from .hxdatabase import Database
+import ncxtamira
+from .database import AmiraDatabase
 from .sxtcnn.loaders import AmiraLoaderx100
 from .sxtcnn.models import UNet3D
 from .sxtcnn.processors import RandomBlockProcessor
@@ -10,6 +11,8 @@ import seaborn as sns
 import pandas as pd
 from tqdm.auto import tqdm
 import numpy as np
+
+from ncxtamira.organelles import Organelles
 
 
 class NCXTPipe:
@@ -33,12 +36,12 @@ class NCXTPipe:
     ):
 
         self.working_directory = working_directory
-        self.db = Database(folder=folder, wd=working_directory, sanitize=sanitize)
-        self.db_base = Database(
+        self.db = AmiraDatabase(folder=folder, wd=working_directory, sanitize=sanitize)
+        self.db_base = AmiraDatabase(
             folder=folder_base, wd=working_directory, sanitize=sanitize
         )
 
-        self.task = task
+        self.task = Organelles.extract_materials(task)
 
         if loader_args is not None:
             self._loader_args = loader_args
@@ -67,9 +70,9 @@ class NCXTPipe:
 
         # Fix obligatory arguments
 
-        filelist = self.db.filelist(*task) + self.db_base.filelist(*task)
+        filelist = self.db.filelist(*self.task) + self.db_base.filelist(*self.task)
         print(
-            f"Files {len(self.db.filelist(*task))} + {len(self.db_base.filelist(*task))}"
+            f"Files {len(self.db.filelist(*self.task))} + {len(self.db_base.filelist(*self.task))}"
         )
 
         if not self._loader_args.get("files"):
@@ -187,3 +190,13 @@ class NCXTPipe:
         )
         g.despine(left=True)
         g.set_axis_labels("", "Mean LAC")
+
+    def check_loader(self, index=0):
+        proj = ncxtamira.AmiraCell.from_hx(
+            self.loader.files[index], sanitize=self._loader_args["sanitize"]
+        )
+        proj.preview()
+
+        data = self.loader[index]
+        proj_loader = ncxtamira.AmiraCell(data["input"][0], data["target"], data["key"])
+        proj_loader.preview()

@@ -1,4 +1,4 @@
-from . import ncxtamira, sxtcnn, utils, volumeblocks
+from . import sxtcnn, utils, volumeblocks
 
 from .sxtcnn import SXTCNN, loaders, models, processors, criteria
 from .segmenter import Segmenter
