@@ -364,8 +364,13 @@ class UNet3D(nn.Module):
                 if "bias" in str(name_base):
                     base_params[name_base].data.copy_(param_base.data * 0)
                 if "weight" in str(name_base):
-                    base_params[name_base].data.copy_(param_base.data * 0 + 1)
-            retval = torch.abs(self.features(tensor)).sum(axis=0).sum(axis=0)
+                    base_params[name_base].data.copy_(
+                        param_base.data * 0 + 1.0 / param_base.data[0, :].nelement()
+                    )
+            features = self.features(tensor)
+            features_abs = torch.abs(features)
+            retval = torch.sum(features_abs, dim=(0, 1))
+
             # restore params
             for name_base, param_base in stored_params.items():
                 base_params[name_base].data.copy_(param_base.data)
@@ -382,8 +387,8 @@ if __name__ == "__main__":
     """
     testing
     """
-    L = 32
-    MODEL = UNet3D(2, in_channels=1, depth=2, start_filts=16)
+    L = 64
+    MODEL = UNet3D(2, in_channels=1, depth=4, start_filts=16)
 
     if DEBUG:
         TEST_TENSOR = Variable(torch.FloatTensor(np.random.random((1, 1, L, L, L))))
@@ -393,3 +398,5 @@ if __name__ == "__main__":
         TEST_TENSOR = Variable(torch.FloatTensor(np.random.random((1, 1, L, L, L))))
         rf = MODEL.receptive_fied(TEST_TENSOR)
         print(rf.shape)
+        rf = rf.cpu().numpy()
+        print(f"rf {np.min(rf)} -- {np.max(rf)}")
