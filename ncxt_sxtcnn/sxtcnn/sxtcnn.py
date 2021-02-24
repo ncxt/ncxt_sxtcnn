@@ -32,6 +32,7 @@ from .utils import (
     tqdm_bar,
     stablehash,
     getbestgpu,
+    get_free_gpu_memory_map,
 )
 from .models.torchsummary import size_mb
 
@@ -73,7 +74,7 @@ class Settings:
         self.augment_affine = 0
 
         # undesrscore for members not hashed via properties
-        self._batch_size = 4
+        self._batch_size = 2
         self._num_workers = 4
         self._reset = False
         self._parallel = False
@@ -528,6 +529,7 @@ class SXTCNN:
             self.save_if_best()
 
             self.change_learning_rate()
+            self.increase_batch()
 
             if self.stopping_criterion():
                 break
@@ -898,3 +900,12 @@ class SXTCNN:
             print(f"model {self._model_hash} {hashvars(self.model)}")
             self.save()
             print(f"model {self._model_hash} {hashvars(self.model)}")
+
+    def increase_batch(self, extra_buffer=1):
+        cuda_index = int(self.device.split(":")[1])
+        memory_avail = get_free_gpu_memory_map()[cuda_index]
+
+        if (memory_avail - self.model_size * extra_buffer) > self.model_size:
+            print(f"model_size {self.model_size} memory_avail {memory_avail}")
+            print(f"Increasing batch to {self.settings.batch_size + 1}")
+            self.settings.batch_size = self.settings.batch_size + 1

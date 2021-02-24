@@ -19,13 +19,14 @@ class NCXTPipe:
     def __init__(
         self,
         folder,
-        folder_base,
         working_directory,
+        folder_base=None,
         loader=AmiraLoaderx100,
         model=UNet3D,
         processor=RandomBlockProcessor,
         criterion=CrossEntropyLoss,
-        task=["membrane"],
+        labels=None,
+        organelles=None,
         loader_args=None,
         processor_args=None,
         model_args=None,
@@ -41,7 +42,12 @@ class NCXTPipe:
             folder=folder_base, wd=working_directory, sanitize=sanitize
         )
 
-        self.task = Organelles.extract_materials(task)
+        assert bool(labels) != bool(organelles), "Define either organelles or labels"
+
+        if organelles:
+            self.task = Organelles.extract_materials(organelles)
+        elif labels:
+            self.task = labels
 
         if loader_args is not None:
             self._loader_args = loader_args
@@ -130,6 +136,10 @@ class NCXTPipe:
         )
         self.sxtcnn.set_device(self._device)
 
+    def init_fold(self, index):
+        train_idx, valid_idx = self.kfold_split(index)
+        self.sxtcnn.init_data(train_idx, valid_idx)
+
     def train(self):
         if not self.sxtcnn:
             self.setup()
@@ -138,14 +148,16 @@ class NCXTPipe:
         #     print(Path(f).name)
 
         if self.fold == 0:
-            train_idx, valid_idx = self.kfold_split(0)
-            self.sxtcnn.init_data(train_idx, valid_idx)
-            self.sxtcnn.run()
+            self.init_fold(0)
+            self.sxtcnn.load_trained()
 
         for i in range(self.fold):
-            train_idx, valid_idx = self.kfold_split(i)
-            self.sxtcnn.init_data(train_idx, valid_idx)
-            self.sxtcnn.run()
+            self.init_fold(i)
+            self.sxtcnn.load_trained()
+
+    def plot_train(self, index=0):
+        self.init_fold(index)
+        self.sxtcnn.logger.plot()
 
     def model_summary(self):
         if not self.sxtcnn:

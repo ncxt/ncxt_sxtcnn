@@ -75,7 +75,7 @@ def record_overlaydata(project, datapath, reset=False):
 class AmiraDatabase:
     def __init__(self, folder=None, sanitize=False, wd=None):
         self._records = []
-        self.folder = Path(folder)
+        self.folder = Path(folder) if folder else None
         self.wd = Path(folder) if wd is None else Path(wd)
         self.sanitize = sanitize
         if folder:
@@ -176,7 +176,11 @@ class AmiraDatabase:
             return df
 
         sel = df["sample"] != ""
-        for label in args:
+
+        features = list(args).copy()
+        if "*" in features:
+            features.remove("*")
+        for label in features:
             if not isinstance(label, (list, tuple)):
                 label = [label]
             sel_label = df["sample"] == ""
@@ -188,5 +192,5 @@ class AmiraDatabase:
 
     def filelist(self, *args):
         dfsel = self.dataframe_sel(*args)
-        hxfiles = [str(self[i]) for i in dfsel.index]
+        hxfiles = [self._records[index].hxpath for index in dfsel.index]
         return hxfiles
