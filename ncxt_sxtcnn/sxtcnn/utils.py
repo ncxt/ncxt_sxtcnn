@@ -5,6 +5,7 @@ from tqdm import trange, tnrange
 from tqdm import tqdm, tqdm_notebook
 import torch
 import logging
+import subprocess
 
 
 def isnotebook():
@@ -67,8 +68,8 @@ def path_not_empty(directory):
 
 
 def ensure_dir(directory):
-    """Ensure the folder exists 
-    
+    """Ensure the folder exists
+
     Arguments:
         file_path {string} -- full path to file
     """
@@ -103,7 +104,6 @@ def confusion_matrix(a, b, labels):
 
 
 def gpuinfo(gpuid):
-    import subprocess
 
     sp = subprocess.Popen(
         ["nvidia-smi", "-q", "-i", str(gpuid), "-d", "MEMORY"],
@@ -137,3 +137,22 @@ def getbestgpu():
     # print("--> GPU device %d was chosen" % idbest)
     return idbest
 
+
+def get_free_gpu_memory_map():
+    """Get the current gpu usage.
+
+    Returns
+    -------
+    usage: dict
+        Keys are device ids as integers.
+        Values are memory usage as integers in MB.
+    """
+
+    result = subprocess.check_output(
+        ["nvidia-smi", "--query-gpu=memory.free", "--format=csv,nounits,noheader"],
+        encoding="utf-8",
+    )
+    # Convert lines into a dictionary
+    gpu_memory = [int(x) for x in result.strip().split("\n")]
+    gpu_memory_map = dict(zip(range(len(gpu_memory)), gpu_memory))
+    return gpu_memory_map
