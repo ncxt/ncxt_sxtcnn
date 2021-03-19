@@ -202,6 +202,7 @@ class NCXTPipe:
         )
         g.despine(left=True)
         g.set_axis_labels("", "Mean LAC")
+        return df
 
     def check_loader(self, index=0):
         proj = ncxtamira.AmiraCell.from_hx(
