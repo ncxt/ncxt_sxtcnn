@@ -1,6 +1,6 @@
 import ncxtamira
 from .database import AmiraDatabase
-from .sxtcnn.loaders import AmiraLoaderx100
+from .sxtcnn.loaders import AmiraLoaderOrganelle
 from .sxtcnn.models import UNet3D
 from .sxtcnn.processors import RandomBlockProcessor
 from .sxtcnn.criteria import CrossEntropyLoss_DiceLoss, CrossEntropyLoss
@@ -21,7 +21,7 @@ class NCXTPipe:
         folder,
         working_directory,
         folder_base=None,
-        loader=AmiraLoaderx100,
+        loader=AmiraLoaderOrganelle,
         model=UNet3D,
         processor=RandomBlockProcessor,
         criterion=CrossEntropyLoss,

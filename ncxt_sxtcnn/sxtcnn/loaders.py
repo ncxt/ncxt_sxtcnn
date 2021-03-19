@@ -1,3 +1,4 @@
+from ncxtamira.organelles import Organelles
 import numpy as np
 import ncxtamira
 
@@ -167,6 +168,36 @@ class AmiraLoaderx100:
 
     def __call__(self, data):
         retval = data.copy() * 100
+        return retval.reshape(1, *retval.shape)
+
+
+class AmiraLoaderOrganelle:
+    def __init__(self, files, organelles, sanitize=False, scale=100):
+        assert isinstance(organelles, (list, tuple)), "Give features as list of lists"
+        self.files = files
+        self.organelles = organelles
+        self.sanitize = sanitize
+        self.scale = scale
+
+        self._features = Organelles.organelles_to_features(organelles)
+
+    def __len__(self):
+        return len(self.files)
+
+    def __getitem__(self, index):
+
+        data = ncxtamira.AmiraCell.from_hx(self.files[index], sanitize=self.sanitize)
+        lac_input = data.lac * self.scale
+        label_sel, key = FeatureSelector(data.key, self._features)(data.labels)
+
+        return {
+            "input": lac_input.reshape(1, *lac_input.shape),
+            "target": label_sel.astype(int),
+            "key": key,
+        }
+
+    def __call__(self, data):
+        retval = data.copy() * self.scale
         return retval.reshape(1, *retval.shape)
 
 
