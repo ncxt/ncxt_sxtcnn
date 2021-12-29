@@ -74,6 +74,7 @@ def feature_selector(image, keydict, features, cellmask=False):
 class FeatureSelector:
     def __init__(self, key, *features):
         self.key = key.copy()
+        self.conversion_dict = {"void": 0}
         self.material_dict = {"void": 0}
         self.cellmask = False
         self.features = []
@@ -89,7 +90,9 @@ class FeatureSelector:
         for i, feature in enumerate(self.features):
             index = self.cellmask + 1 + i
             for material in feature:
-                if material in self.key:
+                matching = [label for label in self.key.keys() if material in label]
+                for m in matching:
+                    self.conversion_dict[m] = index
                     self.material_dict[material] = index
 
     def __call__(self, image):
@@ -104,7 +107,7 @@ class FeatureSelector:
             if self.cellmask
             else np.zeros(image.shape, dtype=int)
         )
-        for k, v in self.material_dict.items():
+        for k, v in self.conversion_dict.items():
             if k not in ["void", "wildcard"]:
                 retlabel[image == self.key[k]] = v
 
@@ -272,6 +275,37 @@ class CascadeAmiraLoader:
         return self.cascade_input(self._loader(volume))
 
 
+class CascadeAmiraLoaderOrganelles:
+    def __init__(self, segmenter, files, organelles):
+        self.files = files
+        self.organelles = organelles
+        self.sigma = 2
+        self._segmenter = segmenter
+        self._loader = copy.deepcopy(segmenter.loader)
+        self._loader.files = files
+        self._loader.organelles = organelles
+
+    def __len__(self):
+        return len(self.files)
+
+    def cascade_input(self, data):
+        model_prediction = self._segmenter.model_probability(data)
+        for index, _ in enumerate(model_prediction):
+            model_prediction[index] = gaussian_filter(
+                model_prediction[index], sigma=self.sigma
+            )
+        model_prediction[0] = data
+        return model_prediction
+
+    def __getitem__(self, index):
+        sample = self._loader[index]
+        sample["input"] = self.cascade_input(sample["input"])
+        return sample
+
+    def __call__(self, volume):
+        return self.cascade_input(self._loader(volume))
+
+
 import copy
 
 
@@ -284,6 +318,35 @@ class OneHotCascadeAmiraLoader:
         self._loader = copy.deepcopy(segmenter.loader)
         self._loader.files = files
         self._loader.features = features
+
+    def __len__(self):
+        return len(self.files)
+
+    def cascade_input(self, data):
+        model_prediction = self._segmenter.model_prediction(data)
+        n_values = self._segmenter.model.num_classes
+        onehot = np.transpose(np.eye(n_values)[model_prediction], (3, 0, 1, 2))
+        onehot[0] = data
+        return onehot
+
+    def __getitem__(self, index):
+        sample = self._loader[index]
+        sample["input"] = self.cascade_input(sample["input"])
+        return sample
+
+    def __call__(self, volume):
+        return self.cascade_input(self._loader(volume))
+
+
+class OneHotCascadeAmiraLoaderOrganelles:
+    def __init__(self, segmenter, files, organelles):
+        self.files = files
+        self.organelles = organelles
+        self.sigma = 2
+        self._segmenter = segmenter
+        self._loader = copy.deepcopy(segmenter.loader)
+        self._loader.files = files
+        self._loader.organelles = organelles
 
     def __len__(self):
         return len(self.files)

@@ -509,7 +509,7 @@ class RandomBlockProcessor(DataProcessor):
         sampler_size = [d + self.pad for d in block_shape_big]
 
         fileindex = 0
-        for ind in tqdm_bar(indices):
+        for ind in indices:
             sample = self._loader[ind]
             data = sample["input"]
             labels = sample["target"]

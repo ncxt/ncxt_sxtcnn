@@ -27,19 +27,19 @@ class CFMMetrics:
         return 2 * np.sum(self._tp) / (np.sum(self._pred) + np.sum(self._label))
 
     def f1_macro(self):
-        return np.mean(2 * self._tp / (self._label + self._pred))
+        return np.nanmean(2 * self._tp / (self._label + self._pred))
 
     def recall_micro(self):
         return np.sum(self._tp) / np.sum(self._pred)
 
     def recall_macro(self):
-        return np.mean(self._tp / self._pred)
+        return np.nanmean(self._tp / self._pred)
 
     def precision_micro(self):
         return np.sum(self._tp) / np.sum(self._label)
 
     def precision_macro(self):
-        return np.mean(self._tp / self._label)
+        return np.nanmean(self._tp / self._label)
 
     def __str__(self):
         header = f"CFMMetrics [{self.id}]\n" + "=" * 20

@@ -78,6 +78,8 @@ class Segmenter:
         model_args=None,
         criterion_args=None,
         settings=None,
+        fold=0,
+        working_directory=None,
     ):
 
         if loader_args is not None:
@@ -105,8 +107,12 @@ class Segmenter:
         else:
             self._settings = dict()
 
-        self._folder = Path(tempfile.gettempdir())
-        self._fold = 0
+        self._folder = (
+            Path(tempfile.gettempdir())
+            if working_directory is None
+            else working_directory
+        )
+        self._fold = fold
         self._device = None
 
         # TODO: ignore as argument
@@ -290,7 +296,7 @@ class Segmenter:
         return retval
 
     @classmethod
-    def from_dict(cls, dictionary):
+    def from_dict(cls, dictionary, fold=None, working_directory=None):
 
         # init_args = dictionary["Segmenter"]
         loader, loader_args = dictionary["loader"]
@@ -311,12 +317,25 @@ class Segmenter:
             model_args=model_args,
             criterion_args=criterion_args,
             settings=settings_args,
+            fold=fold,
+            working_directory=working_directory,
         )
+
         retval.setup()
         return retval
 
     @classmethod
-    def from_json(cls, filename):
+    def from_json(cls, filename, fold=None):
         with open(filename, "r") as read_file:
             jsondict = json.load(read_file)
-            return cls.from_dict(jsondict)
+            return cls.from_dict(jsondict, fold=fold, working_directory=filename.parent)
+
+    def k_fold_ensamble(self, data):
+        p_list = []
+        for i in range(3):
+            cnn = self.load_trained(i)
+            p_list.append(cnn.model_probability(cnn.loader(data)))
+
+        p_ensamble = np.mean(p_list, 0)
+        return np.argmax(p_ensamble, 0)
+

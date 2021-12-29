@@ -11,8 +11,13 @@ import seaborn as sns
 import pandas as pd
 from tqdm.auto import tqdm
 import numpy as np
+import warnings
 
 from ncxtamira.organelles import Organelles
+
+
+def arg_as_dict(cls):
+    return dict([(k, v) for k, v in vars(cls).items() if not k.startswith("_")])
 
 
 class NCXTPipe:
@@ -76,15 +81,17 @@ class NCXTPipe:
 
         # Fix obligatory arguments
 
-        filelist = self.db.filelist(*self.task) + self.db_base.filelist(*self.task)
-        print(
-            f"Files {len(self.db.filelist(*self.task))} + {len(self.db_base.filelist(*self.task))}"
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter(action="ignore", category=FutureWarning)
+            filelist = self.db.filelist(*self.task) + self.db_base.filelist(*self.task)
+            print(
+                f"Files {len(self.db.filelist(*self.task))} + {len(self.db_base.filelist(*self.task))}"
+            )
 
         if not self._loader_args.get("files"):
             self._loader_args["files"] = filelist
-        if not self._loader_args.get("features"):
-            self._loader_args["features"] = self.task
+        if not self._loader_args.get("organelles"):
+            self._loader_args["organelles"] = self.task
         if not self._loader_args.get("sanitize"):
             self._loader_args["sanitize"] = sanitize
         if not self._model_args.get("num_classes"):
@@ -119,8 +126,10 @@ class NCXTPipe:
             self._device = value
 
     def kfold_split(self, index):
-        len_task = len(self.db.filelist(*self.task))
-        len_base = len(self.db_base.filelist(*self.task))
+        with warnings.catch_warnings():
+            warnings.simplefilter(action="ignore", category=FutureWarning)
+            len_task = len(self.db.filelist(*self.task))
+            len_base = len(self.db_base.filelist(*self.task))
         train_idx, valid_idx = kfold(index, self.fold, len_task)
         train_idx = list(train_idx) + [i + len_task for i in range(len_base)]
         return train_idx, valid_idx
@@ -134,9 +143,11 @@ class NCXTPipe:
             self.working_directory,
             self.settings,
         )
+        self.model.reset_params()
         self.sxtcnn.set_device(self._device)
 
     def init_fold(self, index):
+        self.setup()
         train_idx, valid_idx = self.kfold_split(index)
         self.sxtcnn.init_data(train_idx, valid_idx)
 
@@ -157,7 +168,18 @@ class NCXTPipe:
 
     def plot_train(self, index=0):
         self.init_fold(index)
+        self.sxtcnn.load_trained()
         self.sxtcnn.logger.plot()
+
+    def k_fold_ensamble(self, data):
+        p_list = []
+        for i in range(self.fold):
+            self.init_fold(i)
+            self.sxtcnn.load_trained()
+            p_list.append(self.sxtcnn.model_probability(self.sxtcnn.loader(data)))
+
+        p_ensamble = np.mean(p_list, 0)
+        return np.argmax(p_ensamble, 0)
 
     def model_summary(self):
         if not self.sxtcnn:
@@ -213,3 +235,27 @@ class NCXTPipe:
         data = self.loader[index]
         proj_loader = ncxtamira.AmiraCell(data["input"][0], data["target"], data["key"])
         proj_loader.preview()
+
+    @property
+    def hash_variables(self):
+        loader = [type(self.loader).__name__, arg_as_dict(self.loader)]
+        processor = [type(self.processor).__name__, arg_as_dict(self.processor)]
+        model = [type(self.model).__name__, arg_as_dict(self.model)]
+        criterion = [type(self.criterion).__name__]
+        settings = self.settings
+
+        return {
+            "loader": loader,
+            "processor": processor,
+            "model": model,
+            "criterion": criterion,
+            "settings": settings,
+        }
+
+    @property
+    def hash(self):
+        return stablehash(self.hash_variables)
+
+    @property
+    def hashed_id(self):
+        return f"{self.hash}_{self.fold}"

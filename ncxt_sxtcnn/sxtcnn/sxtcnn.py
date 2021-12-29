@@ -75,6 +75,7 @@ class Settings:
 
         # undesrscore for members not hashed via properties
         self._batch_size = 2
+        self._max_batch_size = 16
         self._num_workers = 4
         self._reset = False
         self._parallel = False
@@ -99,6 +100,14 @@ class Settings:
     @batch_size.setter
     def batch_size(self, val):
         self._batch_size = val
+
+    @property
+    def max_batch_size(self):
+        return self._max_batch_size
+
+    @max_batch_size.setter
+    def max_batch_size(self, val):
+        self._max_batch_size = val
 
     @property
     def num_workers(self):
@@ -887,11 +896,14 @@ class SXTCNN:
         ]
 
     def load_trained(self):
-        print(f"loading model model {self._model_hash} {hashvars(self.model)}")
+        logstr = f"loading model model {self._model_hash} {hashvars(self.model)}"
+        logger.info(logstr)
+
         try:
             self.check_run()
             self.load()
-            print(f"State at epoch {self.epoch} found")
+            logstr = f"State at epoch {self.epoch} found"
+            logger.info(logstr)
         except FileNotFoundError as not_found:
             print(f"Missing file {not_found.filename}")
             print("State not found, training")
@@ -901,11 +913,12 @@ class SXTCNN:
             self.save()
             print(f"model {self._model_hash} {hashvars(self.model)}")
 
-    def increase_batch(self, extra_buffer=1):
+    def increase_batch(self, extra_buffer=2):
         cuda_index = int(self.device.split(":")[1])
         memory_avail = get_free_gpu_memory_map()[cuda_index]
 
         if (memory_avail - self.model_size * extra_buffer) > self.model_size:
             print(f"model_size {self.model_size} memory_avail {memory_avail}")
-            print(f"Increasing batch to {self.settings.batch_size + 1}")
-            self.settings.batch_size = self.settings.batch_size + 1
+            new_size = min(self.settings.max_batch_size, self.settings.batch_size + 1)
+            print(f"Increasing batch to {new_size}")
+            self.settings.batch_size = new_size
