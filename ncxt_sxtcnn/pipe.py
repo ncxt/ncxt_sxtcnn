@@ -14,6 +14,8 @@ import numpy as np
 import warnings
 
 from ncxtamira.organelles import Organelles
+import torch
+import itertools
 
 
 def arg_as_dict(cls):
@@ -166,6 +168,34 @@ class NCXTPipe:
             self.init_fold(i)
             self.sxtcnn.load_trained()
 
+    def train_mp(self, workers=None):
+
+        if self.fold == 0:
+            print("TODO: Distributed Data Parallel")
+
+        print(f"Found {torch.cuda.device_count()} available devices")
+        n_workers = workers if workers is not None else torch.cuda.device_count()
+        print(f"Multiprocess over {self.fold} folds with {n_workers} workers")
+
+        import torch.multiprocessing as _mp
+
+        pipe_args = itertools.repeat(self)
+        device_args = list(
+            itertools.islice(
+                itertools.cycle(np.arange(torch.cuda.device_count())), self.fold
+            )
+        )
+        fold_args = list(np.arange(self.fold))
+
+        mp_args = [
+            {"pipeline": p, "device": d, "index": i}
+            for p, d, i in zip(pipe_args, device_args, fold_args)
+        ]
+
+        mp = _mp.get_context("spawn")
+        with mp.Pool(n_workers) as p:
+            print(p.map(mp_train, mp_args))
+
     def plot_train(self, index=0):
         self.init_fold(index)
         self.sxtcnn.load_trained()
@@ -224,7 +254,6 @@ class NCXTPipe:
         )
         g.despine(left=True)
         g.set_axis_labels("", "Mean LAC")
-        return df
 
     def check_loader(self, index=0):
         proj = ncxtamira.AmiraCell.from_hx(
@@ -259,3 +288,16 @@ class NCXTPipe:
     @property
     def hashed_id(self):
         return f"{self.hash}_{self.fold}"
+
+
+def mp_train(argsdict):
+    print("mp_train got")
+    print(argsdict)
+
+    pipe = argsdict["pipeline"]
+    pipe.device = f"cuda:{argsdict['device']}"
+    pipe.settings["num_workers"] = 0
+    pipe.setup()
+    pipe.init_fold(argsdict["index"])
+    pipe.sxtcnn.load_trained()
+    return argsdict["index"]
