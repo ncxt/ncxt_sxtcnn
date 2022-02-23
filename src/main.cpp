@@ -62,9 +62,10 @@ PYBIND11_MODULE(_blocks, m) {
     // m.def("pb_divide", &pb_divide, "divide limits");
     // m.def("pb_combine_volume", &pb_combine_volume<float>, "pb_combine_volume");
 
-#ifdef VERSION_INFO
-    m.attr("__version__") = VERSION_INFO;
-#else
-    m.attr("__version__") = "dev";
-#endif
+// broke in vs 2022 for some reason
+// #ifdef VERSION_INFO
+//     m.attr("__version__") = VERSION_INFO;
+// #else
+//     m.attr("__version__") = "dev";
+// #endif
 }
