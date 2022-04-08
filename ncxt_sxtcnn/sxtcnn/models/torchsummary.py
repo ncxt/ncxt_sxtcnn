@@ -71,21 +71,21 @@ def size_mb(model, input_size, device="cuda"):
         shapes = summary[layer]["output_shape"]
 
         if isinstance(shapes[0], int):
-            total_size += np.prod(shapes[1:])
+            total_size += int(np.prod(shapes[1:]))
         else:
             for subshape in shapes:
-                total_size += np.prod(subshape[1:])
+                total_size += int(np.prod(subshape[1:]))
 
         total_params += summary[layer]["nb_params"]
         if "trainable" in summary[layer]:
             if summary[layer]["trainable"] == True:
                 trainable_params += summary[layer]["nb_params"]
 
-    inp_bits = np.prod(input_size)
+    inp_bits = int(np.prod(input_size))
     param_bits = total_params
-    intern_bits = int(total_size * 2)
+    intern_bits = (total_size * 2)
     total = inp_bits + param_bits + intern_bits
-    return int(total * bits / 8 / (1024 ** 2))
+    return (total * bits / 8 / (1024 ** 2))
 
 
 def summary(model, input_size, device="cuda"):
@@ -164,10 +164,10 @@ def summary(model, input_size, device="cuda"):
         shapes = summary[layer]["output_shape"]
 
         if isinstance(shapes[0], int):
-            total_size += np.prod(shapes[1:])
+            total_size += int(np.prod(shapes[1:]))
         else:
             for subshape in shapes:
-                total_size += np.prod(subshape[1:])
+                total_size += int(np.prod(subshape[1:]))
 
         # input_shape, output_shape, trainable, nb_params
         line_new = "{:>20}  {:>25} {:>15}".format(
@@ -180,19 +180,21 @@ def summary(model, input_size, device="cuda"):
             if summary[layer]["trainable"] == True:
                 trainable_params += summary[layer]["nb_params"]
         print(line_new)
+
     print("================================================================")
     print("Total size: {0:,}".format(total_size))
     print("Total params: {0:,}".format(total_params))
     print("Trainable params: {0:,}".format(trainable_params))
     print("Non-trainable params: {0:,}".format(total_params - trainable_params))
 
-    print(f"Input size: {np.prod(input_size)}")
-    print(f"params size: {total_params}")
-    print(f"Internal size: {total_size*2}")
-    inp_bits = np.prod(input_size)
+    inp_bits = int(np.prod(input_size))
     param_bits = total_params
-    intern_bits = int(total_size * 2)
+    intern_bits = 2*total_size 
     total = inp_bits + param_bits + intern_bits
+    print(f"Input size: {inp_bits}")
+    print(f"params size: {total_params}")
+    print(f"Internal size: {intern_bits}")
+
     print(f"Input size: {bytes_2_human_readable(inp_bits* bits/8)}")
     print(f"Params size: {bytes_2_human_readable(param_bits* bits/8)}")
     print(f"Total size: {bytes_2_human_readable(total* bits/8)}")
