@@ -1,6 +1,8 @@
 from ncxtamira.organelles import Organelles
 import numpy as np
 import ncxtamira
+from .utils import hashvars, stablehash
+from pathlib import Path
 
 
 class MockLoader:
@@ -175,7 +177,7 @@ class AmiraLoaderx100:
 
 
 class AmiraLoaderOrganelle:
-    def __init__(self, files, organelles, sanitize=False, scale=100):
+    def __init__(self, files, organelles, sanitize=False, scale=100, working_directory = None):
         assert isinstance(organelles, (list, tuple)), "Give features as list of lists"
         self.files = files
         self.organelles = organelles
@@ -183,12 +185,12 @@ class AmiraLoaderOrganelle:
         self.scale = scale
 
         self._features = Organelles.organelles_to_features(organelles)
+        self._working_directory = working_directory
 
     def __len__(self):
         return len(self.files)
 
-    def __getitem__(self, index):
-
+    def _load_item(self, index):
         data = ncxtamira.AmiraCell.from_hx(self.files[index], sanitize=self.sanitize)
         lac_input = data.lac * self.scale
         label_sel, key = FeatureSelector(data.key, self._features)(data.labels)
@@ -199,9 +201,38 @@ class AmiraLoaderOrganelle:
             "key": key,
         }
 
+    def __getitem__(self, index):
+        if self._working_directory is not None:
+            path_item = self._cache_dir / f'item_{index}.npy'
+            if path_item.exists():
+                item = np.load(path_item,allow_pickle = True).item()
+            else:
+                item = self._load_item(index)
+                path_item.parent.mkdir(parents=True, exist_ok=True)
+                np.save(path_item, item,allow_pickle = True)
+            return item
+
+        return self._load_item(index)
+
     def __call__(self, data):
         retval = data.copy() * self.scale
         return retval.reshape(1, *retval.shape)
+
+    @property
+    def _cache_dir(self):
+        if self._working_directory is None:
+            raise ValueError('Caching requires passing option "working_directory" in the construction') 
+        return Path(self._working_directory) / f"{type(self).__name__}_{self._hash}"
+
+
+
+    @property
+    def _hash(self):
+        modelvars = hashvars(self)
+        return stablehash(
+            type(self).__name__, modelvars,
+        )
+
 
 
 import ncxtutils

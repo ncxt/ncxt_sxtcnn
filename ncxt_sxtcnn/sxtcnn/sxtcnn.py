@@ -460,6 +460,22 @@ class SXTCNN:
         self.train_idx, self.valid_idx = kfold(index, k, len(self.loader))
         self._init_data()
 
+    def reinit_data(self, mode, seed):
+        if mode == "train":
+            self.processor.init_data(
+                self.loader,
+                folder=self.data_folder_train,
+                indices=self.train_idx,
+                seed=seed,
+            )
+        elif mode == "validation":
+            self.processor.init_data(
+                self.loader,
+                folder=self.data_folder_validation,
+                indices=self.valid_idx,
+                seed=seed,
+            )
+
     def epoch_step(self):
         self.epoch += 1
         calc_cfm = (self.epoch % self.settings.cfm_step) == 0
@@ -534,9 +550,9 @@ class SXTCNN:
 
         t = rangebar(n_epoch) if show_progress else range(n_epoch)
         for _ in t:
+            self.reinit_data("train", self.epoch)  # TODO: flag as parameter?
             self.epoch_step()
             self.save_if_best()
-
             self.change_learning_rate()
             self.increase_batch()
 
@@ -772,7 +788,7 @@ class SXTCNN:
 
         self.plot_cfm_evaluation(inputs[0], labels, output_label)
 
-    def show_receptive_field(self, index=0, mode="train", augment=False, rf_th=0.01):
+    def show_receptive_field(self, index=0, mode="train", threshold=0.5, augment=False):
         assert mode in [
             "train",
             "validation",
@@ -804,7 +820,7 @@ class SXTCNN:
         inputs = inputs.cpu().numpy()[0]
         labels = labels.cpu().numpy()[0]
         rf = rf.cpu().numpy()
-        rf_clip = np.clip(rf, 0, rf_th) / rf_th
+        rf = np.clip(rf, 0, threshold) / threshold
 
         print(inputs.shape)
         print(labels.shape)
@@ -812,7 +828,7 @@ class SXTCNN:
         imgs = [
             *get_slices(inputs[0]),
             *get_slices(labels),
-            *get_slices(inputs[0] * rf_clip),
+            *get_slices(inputs[0] * rf),
         ]
 
         plt.figure(figsize=(13, 8))
@@ -919,7 +935,7 @@ class SXTCNN:
         memory_avail = get_free_gpu_memory_map()[cuda_index]
 
         if (memory_avail - self.model_size * extra_buffer) > self.model_size:
-            print(f"model_size {self.model_size} memory_avail {memory_avail}")
+            logger.info(f"model_size {self.model_size} memory_avail {memory_avail}")
             new_size = min(self.settings.max_batch_size, self.settings.batch_size + 1)
-            print(f"Increasing batch to {new_size}")
+            logger.info(f"Increasing batch to {new_size}")
             self.settings.batch_size = new_size

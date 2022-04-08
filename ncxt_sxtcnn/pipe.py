@@ -41,6 +41,7 @@ class NCXTPipe:
         settings=None,
         fold=3,
         sanitize=True,
+        cached_loader = True,
     ):
 
         self.working_directory = working_directory
@@ -57,22 +58,22 @@ class NCXTPipe:
             self.task = labels
 
         if loader_args is not None:
-            self._loader_args = loader_args
+            self._loader_args = dict(loader_args)
         else:
             self._loader_args = dict()
 
         if processor_args is not None:
-            self._processor_args = processor_args
+            self._processor_args = dict(processor_args)
         else:
             self._processor_args = dict()
 
         if model_args is not None:
-            self._model_args = model_args
+            self._model_args = dict(model_args)
         else:
             self._model_args = dict()
 
         if criterion_args is not None:
-            self._criterion_args = criterion_args
+            self._criterion_args = dict(criterion_args)
         else:
             self._criterion_args = dict()
 
@@ -96,6 +97,10 @@ class NCXTPipe:
             self._loader_args["organelles"] = self.task
         if not self._loader_args.get("sanitize"):
             self._loader_args["sanitize"] = sanitize
+        if not self._loader_args.get("working_directory"):
+            if cached_loader:
+                self._loader_args["working_directory"] = working_directory
+                
         if not self._model_args.get("num_classes"):
             self._model_args["num_classes"] = len(self.task) + 1
         self._criterion_args["ignore_index"] = self._model_args["num_classes"]
