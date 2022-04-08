@@ -772,7 +772,7 @@ class SXTCNN:
 
         self.plot_cfm_evaluation(inputs[0], labels, output_label)
 
-    def show_receptive_field(self, index=0, mode="train", augment=False):
+    def show_receptive_field(self, index=0, mode="train", augment=False, rf_th=0.01):
         assert mode in [
             "train",
             "validation",
@@ -804,6 +804,7 @@ class SXTCNN:
         inputs = inputs.cpu().numpy()[0]
         labels = labels.cpu().numpy()[0]
         rf = rf.cpu().numpy()
+        rf_clip = np.clip(rf, 0, rf_th) / rf_th
 
         print(inputs.shape)
         print(labels.shape)
@@ -811,7 +812,7 @@ class SXTCNN:
         imgs = [
             *get_slices(inputs[0]),
             *get_slices(labels),
-            *get_slices(inputs[0] * (rf > 0.5)),
+            *get_slices(inputs[0] * rf_clip),
         ]
 
         plt.figure(figsize=(13, 8))

@@ -13,46 +13,22 @@ else:
 # adapted from https://github.com/jaxony/unet-pytorch
 
 
-class Conv3dDirichlet(nn.Module):
-    def __init__(self, in_channels, out_channels, stride=1, bias=True, groups=1):
-        """3x3x3 convolutional operator with dirichlet boundary condtions
-
-        Arguments:
-            in_channels {int} -- number of input channels
-            out_channels {int} -- number of output channels
-
-        Keyword Arguments:
-            stride {int} -- Stride of the convolution (default: {1})
-            bias {bool} -- [description] (default: {True})
-            groups {int} -- [description] (default: {1})
-        """
-
-        super(Conv3dDirichlet, self).__init__()
-
-        self.conv = nn.Conv3d(
-            in_channels,
-            out_channels,
-            kernel_size=3,
-            stride=stride,
-            padding=0,
-            bias=bias,
-            groups=groups,
-        )
-
-    def forward(self, x):
-        x = torch.cat([x[:, :, :1], x, x[:, :, -1:]], dim=2)
-        x = torch.cat([x[:, :, :, :1], x, x[:, :, :, -1:]], dim=3)
-        x = torch.cat([x[:, :, :, :, :1], x, x[:, :, :, :, -1:]], dim=4)
-        return self.conv(x)
-
-
-def conv3x3x3(in_channels, out_channels, stride=1, padding=1, bias=True, groups=1):
+def conv3x3x3(
+    in_channels,
+    out_channels,
+    stride=1,
+    padding=1,
+    padding_mode="zeros",
+    bias=True,
+    groups=1,
+):
     return nn.Conv3d(
         in_channels,
         out_channels,
         kernel_size=3,
         stride=stride,
         padding=padding,
+        padding_mode=padding_mode,
         bias=bias,
         groups=groups,
     )
@@ -81,7 +57,7 @@ class ConvBlock(nn.Module):
         out_channels,
         dropout=None,
         instancenorm=True,
-        dirichlet=False,
+        padding_mode="zeros",
     ):
         super(ConvBlock, self).__init__()
 
@@ -89,10 +65,9 @@ class ConvBlock(nn.Module):
         self.out_channels = out_channels
         self.dropout = None
         self.instance_norm = None
-        if dirichlet:
-            self.conv = Conv3dDirichlet(self.in_channels, self.out_channels)
-        else:
-            self.conv = conv3x3x3(self.in_channels, self.out_channels)
+        self.conv = conv3x3x3(
+            self.in_channels, self.out_channels, padding_mode=padding_mode
+        )
 
         if dropout:
             self.dropout = nn.Dropout3d(p=dropout)
@@ -123,16 +98,16 @@ class DownConv(nn.Module):
         out_channels,
         dropout=None,
         instancenorm=True,
-        dirichlet=False,
+        padding_mode="zeros",
         pooling=True,
     ):
         super(DownConv, self).__init__()
         self.pooling = pooling
         self.block1 = ConvBlock(
-            in_channels, out_channels, dropout, instancenorm, dirichlet
+            in_channels, out_channels, dropout, instancenorm, padding_mode=padding_mode
         )
         self.block2 = ConvBlock(
-            out_channels, out_channels, dropout, instancenorm, dirichlet
+            out_channels, out_channels, dropout, instancenorm, padding_mode=padding_mode
         )
         if self.pooling:
             self.pool = nn.MaxPool3d(kernel_size=2, stride=2)
@@ -167,17 +142,21 @@ class UpConv(nn.Module):
         out_channels,
         dropout=None,
         instancenorm=True,
-        dirichlet=False,
+        padding_mode="zeros",
         up_mode="transpose",
     ):
         super(UpConv, self).__init__()
 
         self.upconv = upconv2x2x2(in_channels, out_channels, mode=up_mode)
         self.block1 = ConvBlock(
-            2 * out_channels, out_channels, dropout, instancenorm, dirichlet
+            2 * out_channels,
+            out_channels,
+            dropout,
+            instancenorm,
+            padding_mode=padding_mode,
         )
         self.block2 = ConvBlock(
-            out_channels, out_channels, dropout, instancenorm, dirichlet
+            out_channels, out_channels, dropout, instancenorm, padding_mode=padding_mode
         )
 
     def forward(self, from_down, from_up):
@@ -227,7 +206,7 @@ class UNet3D(nn.Module):
         start_filts=32,
         dropout=0,
         instancenorm=False,
-        dirichlet=False,
+        padding_mode="zeros",
         up_mode="transpose",
     ):
         """
@@ -257,7 +236,7 @@ class UNet3D(nn.Module):
         self.start_filts = start_filts
         self.dropout = dropout
         self.instancenorm = instancenorm
-        self.dirichlet = dirichlet
+        self.padding_mode = padding_mode
         self.depth = depth
 
         self.down_convs = []
@@ -274,7 +253,7 @@ class UNet3D(nn.Module):
                 outs,
                 dropout=self.dropout,
                 instancenorm=self.instancenorm,
-                dirichlet=self.dirichlet,
+                padding_mode=self.padding_mode,
                 pooling=pooling,
             )
             self.down_convs.append(down_conv)
@@ -290,7 +269,7 @@ class UNet3D(nn.Module):
                 up_mode=up_mode,
                 dropout=self.dropout,
                 instancenorm=self.instancenorm,
-                dirichlet=self.dirichlet,
+                padding_mode=self.padding_mode,
             )
             self.up_convs.append(up_conv)
 
