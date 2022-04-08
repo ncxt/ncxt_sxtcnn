@@ -448,7 +448,7 @@ class SXTCNN:
                 self.loader,
                 folder=self.data_folder_validation,
                 indices=self.valid_idx,
-                seed=1,
+                seed= 2**32 - 1,
             )
 
     def init_data(self, train_idx, valid_idx):
