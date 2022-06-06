@@ -71,7 +71,7 @@ class Settings:
         self.max_without_change = 50
         self.maximum_iterations = 5
         self.augment_linear = 0
-        self.augment_affine = 0
+        self.augment_elastic = 0
 
         # undesrscore for members not hashed via properties
         self._batch_size = 2
@@ -488,7 +488,7 @@ class SXTCNN:
                     folder,
                     random_flip=True,
                     augment_affine=self.settings.augment_affine,
-                    augment_linear=self.settings.augment_linear,
+                    augment_linear=self.settings.augment_elastic,
                 ),
                 batch_size=self.settings.batch_size,
                 num_workers=self.settings.num_workers,
