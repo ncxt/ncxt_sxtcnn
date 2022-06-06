@@ -6,16 +6,22 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
+from .augment import ElasticDeformation
 
 class TrainBlocks(Dataset):
     def __init__(
-        self, path, totorch=True, random_flip=True, augment_affine=0, augment_linear=0
+        self,
+        path,
+        totorch=True,
+        random_flip=True,
+        augment_elastic=0,
+        augment_linear=0,
     ):
         self.path = Path(path)
         self.length = len(os.listdir(path))
         self.totorch = totorch
         self.random_flip = random_flip
-        self.augment_affine = augment_affine
+        self.augment_elastic = augment_elastic
         self.augment_linear = augment_linear
 
         # print(f'folder has {self.length} items')
@@ -25,6 +31,7 @@ class TrainBlocks(Dataset):
             raise IndexError("list index out of range")
 
         data = np.load(self.path / f"data{index}.npy", allow_pickle=True).item()
+
         x = data["x"]
         y = data["y"]
 
@@ -36,10 +43,13 @@ class TrainBlocks(Dataset):
                     x = np.flip(x, axis=dimoffset + dim)
                     y = np.flip(y, axis=dim)
 
-        if self.augment_linear:
+        if self.augment_linear > 0:
             x *= 1 + (np.random.random() - 0.5) * self.augment_linear
-        if self.augment_affine:
-            x += (np.random.random() - 0.5) * self.augment_affine
+
+        if self.augment_elastic > 0:
+            eld = ElasticDeformation(sigma=10)
+            x = eld.deform(x, order=3)
+            y = eld.deform(y, order=0)
 
         if self.totorch:
             torch_x = torch.from_numpy(x.astype("float32"))
