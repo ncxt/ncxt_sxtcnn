@@ -420,35 +420,35 @@ class SXTCNN:
         )
         return self.device
 
-    def check_data_folder(self):
-        for mode in ["train", "validation"]:
-            directory = self._data_folder / mode
-            if (
+    def _needs_initialization(self, mode):
+        directory = self._data_folder / mode
+        if (
                 os.path.isdir(directory)
                 and os.listdir(directory)
                 and not self.settings.reset
             ):
-                logger.info("Data folder %s already exists", directory)
                 return False
+        else:
             ensure_dir(directory)
-        return True
+            return True
 
     def _init_data(self):
-        if self.check_data_folder():
-            logger.info("Initializing data: %s", self._data_folder)
-            logger.info("Training: %s", self.train_idx)
-            logger.info("Vsalidation: %s", self.valid_idx)
+        logger.info("Initializing data: %s", self._data_folder)
+        logger.info("Training: %s", self.train_idx)
+        logger.info("Validation: %s", self.valid_idx)
+        if self._needs_initialization('train'):
             self.processor.init_data(
                 self.loader,
                 folder=self.data_folder_train,
                 indices=self.train_idx,
                 seed=0,
             )
+        if self._needs_initialization('validation'):
             self.processor.init_data(
                 self.loader,
                 folder=self.data_folder_validation,
                 indices=self.valid_idx,
-                seed= 2**32 - 1,
+                seed=2**16 - 1,
             )
 
     def init_data(self, train_idx, valid_idx):
@@ -461,20 +461,21 @@ class SXTCNN:
         self._init_data()
 
     def reinit_data(self, mode, seed):
-        if mode == "train":
+        if mode == 'train':
             self.processor.init_data(
                 self.loader,
                 folder=self.data_folder_train,
                 indices=self.train_idx,
                 seed=seed,
             )
-        elif mode == "validation":
+        elif mode == 'validation':
             self.processor.init_data(
                 self.loader,
                 folder=self.data_folder_validation,
                 indices=self.valid_idx,
                 seed=seed,
             )
+
 
     def epoch_step(self):
         self.epoch += 1
@@ -550,7 +551,7 @@ class SXTCNN:
 
         t = rangebar(n_epoch) if show_progress else range(n_epoch)
         for _ in t:
-            self.reinit_data("train", self.epoch)  # TODO: flag as parameter?
+            self.reinit_data('train', self.epoch) # TODO: flag as parameter?
             self.epoch_step()
             self.save_if_best()
             self.change_learning_rate()
@@ -788,7 +789,7 @@ class SXTCNN:
 
         self.plot_cfm_evaluation(inputs[0], labels, output_label)
 
-    def show_receptive_field(self, index=0, mode="train", threshold=0.5, augment=False):
+    def show_receptive_field(self, index=0, mode="train", threshold = 0.5, augment=False):
         assert mode in [
             "train",
             "validation",
@@ -820,7 +821,7 @@ class SXTCNN:
         inputs = inputs.cpu().numpy()[0]
         labels = labels.cpu().numpy()[0]
         rf = rf.cpu().numpy()
-        rf = np.clip(rf, 0, threshold) / threshold
+        rf = np.clip(rf, 0, threshold)/threshold
 
         print(inputs.shape)
         print(labels.shape)
@@ -828,7 +829,7 @@ class SXTCNN:
         imgs = [
             *get_slices(inputs[0]),
             *get_slices(labels),
-            *get_slices(inputs[0] * rf),
+            *get_slices(inputs[0] *rf),
         ]
 
         plt.figure(figsize=(13, 8))
