@@ -48,7 +48,7 @@ class TrainBlocks(Dataset):
             x *= 1 + (np.random.random() - 0.5) * self.augment_linear
 
         if self.augment_elastic > 0:
-            eld = ElasticDeformation(sigma=10)
+            eld = ElasticDeformation(sigma=self.augment_elastic)
             x = eld.deform(x, order=3)
             y = eld.deform(y, order=0)
 

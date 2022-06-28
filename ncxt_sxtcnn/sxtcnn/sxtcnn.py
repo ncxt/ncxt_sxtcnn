@@ -487,8 +487,8 @@ class SXTCNN:
                 TrainBlocks(
                     folder,
                     random_flip=True,
-                    augment_affine=self.settings.augment_affine,
-                    augment_linear=self.settings.augment_elastic,
+                    augment_linear=self.settings.augment_linear,
+                    augment_elastic=self.settings.augment_elastic,
                 ),
                 batch_size=self.settings.batch_size,
                 num_workers=self.settings.num_workers,
