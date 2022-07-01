@@ -6,6 +6,7 @@ from tqdm import tqdm, tqdm_notebook
 import torch
 import logging
 import subprocess
+from scipy import ndimage as ndi
 
 
 def isnotebook():
@@ -156,3 +157,10 @@ def get_free_gpu_memory_map():
     gpu_memory = [int(x) for x in result.strip().split("\n")]
     gpu_memory_map = dict(zip(range(len(gpu_memory)), gpu_memory))
     return gpu_memory_map
+
+def mask2sdf(mask, spread=32):
+    edt_bg = np.clip(ndi.distance_transform_edt(np.bitwise_not(mask))-0.5, 0,np.infty)
+    edt_fg = np.clip(ndi.distance_transform_edt(mask)-0.5, 0,np.infty)        
+    edt_bg_norm = np.clip(edt_bg / spread, 0, 1)
+    edt_fg_norm = np.clip(edt_fg / spread, 0, 1)
+    return (1 + edt_fg_norm - edt_bg_norm) / 2

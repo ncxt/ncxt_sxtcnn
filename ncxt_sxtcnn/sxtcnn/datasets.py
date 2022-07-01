@@ -36,6 +36,8 @@ class TrainBlocks(Dataset):
         x = data["x"]
         y = data["y"]
 
+        is_label = np.issubdtype(y.dtype, np.integer)
+
         if self.random_flip:
             # x can also be in form (feature,x,y,z)
             dimoffset = x.ndim == 4
@@ -50,13 +52,20 @@ class TrainBlocks(Dataset):
         if self.augment_elastic > 0:
             eld = ElasticDeformation(sigma=self.augment_elastic)
             x = eld.deform(x, order=3)
-            y = eld.deform(y, order=0)
+            y = eld.deform(y, order=3 * is_label)
 
         if self.totorch:
-            torch_x = torch.from_numpy(x.astype("float32"))
+            # take care of the negative stride issue with copying:
+            torch_x = torch.from_numpy(x.copy()).type(torch.FloatTensor)
+
             if x.ndim == 3:
                 torch_x = torch_x.view(1, *x.shape)
-            torch_y = torch.from_numpy(y.astype("float32")).long()
+
+            torch_y = torch.from_numpy(y.copy())
+            if is_label:
+                torch_y = torch_y.type(torch.LongTensor)
+            else:
+                torch_y = torch_y.type(torch.FloatTensor)
 
             return torch_x, torch_y
 

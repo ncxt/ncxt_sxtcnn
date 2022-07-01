@@ -74,11 +74,22 @@ class CrossEntropyLoss_DiceLoss(nn.Module):
 
 
 class CrossEntropyLoss(nn.Module):
-    def __init__(self, weight=None, ignore_index=-100):
+    def __init__(self, ignore_index=-100):
         super(CrossEntropyLoss, self).__init__()
         self.ignore_index = ignore_index
-        self.weight = weight if weight else 1
         self.celoss = nn.CrossEntropyLoss(ignore_index=self.ignore_index)
 
     def forward(self, input, target):
         return self.celoss(input, target)
+
+
+class SingleMSELoss(nn.Module):
+    def __init__(
+        self,
+    ):
+        super(SingleMSELoss, self).__init__()
+        self.loss = nn.MSELoss()
+
+    def forward(self, input, target):
+        target_view = target[:, None, :, :, :]
+        return self.loss(input, target_view)

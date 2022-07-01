@@ -566,3 +566,113 @@ class RandomBlockProcessor(DataProcessor):
             random_state=seed,
         )
         return blocks_x, blocks_y
+
+
+class RandomFloatBlockProcessor(DataProcessor):
+    def __init__(self, block_shape=(32, 32, 32), binning=1, pad=0, n_blocks=10):
+        super().__init__()
+        self.block_shape = tuple(block_shape)
+        self.binning = binning
+        self.n_blocks = n_blocks
+        self.pad = pad
+
+        self._sampling = 1.5
+        self._loader = None
+        self._seed = None
+        self._sampler = None
+
+    def setloader(self, loader):
+        self._loader = loader
+
+    def forward(self, data):
+        block_shape_big = [s * self.binning for s in self.block_shape]
+        sampler_size = [d + self.pad for d in block_shape_big]
+
+        self._sampler = DataSampler(np.maximum(sampler_size, data.shape[-3:]))
+        self._sampler.set_seed(-1)
+
+        lac_blocks = volumeblocks.split(
+            self._sampler.forward(data),
+            block_shape_big,
+            binning=self.binning,
+            sampling=self._sampling,
+        )
+        return lac_blocks
+
+    def backward(self, data):
+        ret_dim = data.shape[1]
+        retval_shape = [ret_dim] + list(self._sampler.roi_shape)
+        return self._sampler.backward(
+            volumeblocks.fuse(
+                data,
+                retval_shape,
+                binning=self.binning,
+                sampling=self._sampling,
+                windowfunc=triang,
+            )
+        )
+
+    def init_data(self, loader, folder, indices, seed):
+        self.setloader(loader)
+        self._seed = seed
+        block_shape_big = [s * self.binning for s in self.block_shape]
+        sampler_size = [d + self.pad for d in block_shape_big]
+
+        fileindex = 0
+        for ind in indices:
+            sample = self._loader[ind]
+            data = sample["input"]
+            labels = sample["target"]
+
+            seed = self._seed + ind if self._seed else np.random.randint(1000)
+            self._sampler = DataSampler(np.maximum(sampler_size, labels.shape))
+            self._sampler.set_seed(seed)
+
+            blocks_x = volumeblocks.random_blocks(
+                self._sampler.forward(data),
+                block_shape_big,
+                max_patches=self.n_blocks,
+                binning=self.binning,
+                random_state=seed + ind,
+            )
+
+            blocks_y = volumeblocks.random_blocks(
+                self._sampler.forward(labels),
+                block_shape_big,
+                max_patches=self.n_blocks,
+                binning=self.binning,
+                random_state=seed + ind,
+            )
+
+            for bx, by in zip(blocks_x, blocks_y):
+                data_dict = {"x": bx, "y": by}
+                np.save(folder / f"data{fileindex}", data_dict)
+                fileindex += 1
+
+    def __getitem__(self, index):
+        block_shape_big = [s * self.binning for s in self.block_shape]
+
+        sample = self._loader[index]
+        data = sample["input"]
+        labels = sample["target"]
+        seed = self._seed + index if self._seed else np.random.randint(1000)
+
+        self._sampler = DataSampler(np.maximum(block_shape_big, labels.shape))
+        self._sampler.set_seed(seed)
+
+        blocks_x = volumeblocks.random_blocks(
+            self._sampler.forward(data),
+            block_shape_big,
+            max_patches=self.n_blocks,
+            binning=self.binning,
+            random_state=seed,
+        )
+
+        blocks_y = volumeblocks.random_blocks(
+            self._sampler.forward(labels),
+            block_shape_big,
+            max_patches=self.n_blocks,
+            binning=self.binning,
+            random_state=seed,
+        )
+        return blocks_x, blocks_y

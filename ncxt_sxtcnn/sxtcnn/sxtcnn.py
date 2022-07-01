@@ -423,11 +423,11 @@ class SXTCNN:
     def _needs_initialization(self, mode):
         directory = self._data_folder / mode
         if (
-                os.path.isdir(directory)
-                and os.listdir(directory)
-                and not self.settings.reset
-            ):
-                return False
+            os.path.isdir(directory)
+            and os.listdir(directory)
+            and not self.settings.reset
+        ):
+            return False
         else:
             ensure_dir(directory)
             return True
@@ -436,19 +436,19 @@ class SXTCNN:
         logger.info("Initializing data: %s", self._data_folder)
         logger.info("Training: %s", self.train_idx)
         logger.info("Validation: %s", self.valid_idx)
-        if self._needs_initialization('train'):
+        if self._needs_initialization("train"):
             self.processor.init_data(
                 self.loader,
                 folder=self.data_folder_train,
                 indices=self.train_idx,
                 seed=0,
             )
-        if self._needs_initialization('validation'):
+        if self._needs_initialization("validation"):
             self.processor.init_data(
                 self.loader,
                 folder=self.data_folder_validation,
                 indices=self.valid_idx,
-                seed=2**16 - 1,
+                seed=2 ** 16 - 1,
             )
 
     def init_data(self, train_idx, valid_idx):
@@ -461,14 +461,14 @@ class SXTCNN:
         self._init_data()
 
     def reinit_data(self, mode, seed):
-        if mode == 'train':
+        if mode == "train":
             self.processor.init_data(
                 self.loader,
                 folder=self.data_folder_train,
                 indices=self.train_idx,
                 seed=seed,
             )
-        elif mode == 'validation':
+        elif mode == "validation":
             self.processor.init_data(
                 self.loader,
                 folder=self.data_folder_validation,
@@ -476,13 +476,13 @@ class SXTCNN:
                 seed=seed,
             )
 
-
     def epoch_step(self):
         self.epoch += 1
         calc_cfm = (self.epoch % self.settings.cfm_step) == 0
 
         for step in ["train", "validation"]:
             folder = self._data_folder / step
+
             loader = torch.utils.data.DataLoader(
                 TrainBlocks(
                     folder,
@@ -509,7 +509,6 @@ class SXTCNN:
 
             for sample_batched in loader:
                 inputs, labels = sample_batched
-                labels = labels.long()
 
                 inputs = inputs.to(self.device)
                 labels = labels.to(self.device)
@@ -524,9 +523,10 @@ class SXTCNN:
                     self.optimizer.step()
 
                 if calc_cfm:
-                    cfm_accumulate += model_confusion_matrix(
-                        model_out, labels, self.num_classes
-                    )
+                    if self.num_classes > 1:
+                        cfm_accumulate += model_confusion_matrix(
+                            model_out, labels, self.num_classes
+                        )
 
             if calc_cfm:
                 logs_cfm.append(cfm_accumulate)
@@ -551,7 +551,7 @@ class SXTCNN:
 
         t = rangebar(n_epoch) if show_progress else range(n_epoch)
         for _ in t:
-            self.reinit_data('train', self.epoch) # TODO: flag as parameter?
+            self.reinit_data("train", self.epoch)  # TODO: flag as parameter?
             self.epoch_step()
             self.save_if_best()
             self.change_learning_rate()
@@ -666,15 +666,25 @@ class SXTCNN:
         self.model.eval()
         with torch.no_grad():
             inputs, labels = loader[index]
-            labels = labels.long()
+
             inputs = inputs.view(1, *inputs.shape).to(self.device)
             labels = labels.view(1, *labels.shape).to(self.device)
-            output = torch.softmax(self.model(inputs), dim=1)
+            output = self.model(inputs)
+            if self.num_classes > 1:
+                output = torch.softmax(self.model(inputs), dim=1)
 
         inputs = inputs.cpu().numpy()[0]
         labels = labels.cpu().numpy()[0]
-        output_label = torch.argmax(output, dim=1).cpu().numpy()[0]
+        if self.num_classes > 1:
+            print("segmentation")
+            output_label = torch.argmax(output, dim=1).cpu().numpy()[0]
+        else:
+            print("match")
+            output_label = (output > 0.5).cpu().numpy()[0, 0]
+
         output = output.cpu().numpy()[0]
+        print(output.shape)
+        print(output_label.shape)
         return inputs, labels, output_label, output
 
     def show_training_data(self, index=0, mode="train"):
@@ -789,7 +799,7 @@ class SXTCNN:
 
         self.plot_cfm_evaluation(inputs[0], labels, output_label)
 
-    def show_receptive_field(self, index=0, mode="train", threshold = 0.5, augment=False):
+    def show_receptive_field(self, index=0, mode="train", threshold=0.5, augment=False):
         assert mode in [
             "train",
             "validation",
@@ -821,7 +831,7 @@ class SXTCNN:
         inputs = inputs.cpu().numpy()[0]
         labels = labels.cpu().numpy()[0]
         rf = rf.cpu().numpy()
-        rf = np.clip(rf, 0, threshold)/threshold
+        rf = np.clip(rf, 0, threshold) / threshold
 
         print(inputs.shape)
         print(labels.shape)
@@ -829,7 +839,7 @@ class SXTCNN:
         imgs = [
             *get_slices(inputs[0]),
             *get_slices(labels),
-            *get_slices(inputs[0] *rf),
+            *get_slices(inputs[0] * rf),
         ]
 
         plt.figure(figsize=(13, 8))
