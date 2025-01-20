@@ -52,7 +52,8 @@ class TrainBlocks(Dataset):
         if self.augment_elastic > 0:
             eld = ElasticDeformation(sigma=self.augment_elastic)
             x = eld.deform(x, order=3)
-            y = eld.deform(y, order=3 * is_label)
+            ord_y = 0 if is_label else 3
+            y = eld.deform(y, order=ord_y)
 
         if self.totorch:
             # take care of the negative stride issue with copying:

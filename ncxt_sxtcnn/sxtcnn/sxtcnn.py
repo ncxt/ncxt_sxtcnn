@@ -357,7 +357,8 @@ class SXTCNN:
     def load(self):
         """ load latest saved state """
         self.load_state_dict(np.load(self.file_state, allow_pickle=True).item())
-        print(f"Loading state {self.epoch} with last weights")
+        logstr = f"Loading state {self.epoch} with last weights"
+        logger.info(logstr)
         self.model.load_state_dict(torch.load(self.file_weights))
 
     def load_best(self):
@@ -666,6 +667,7 @@ class SXTCNN:
         self.model.eval()
         with torch.no_grad():
             inputs, labels = loader[index]
+            print(inputs.shape, labels.shape)
 
             inputs = inputs.view(1, *inputs.shape).to(self.device)
             labels = labels.view(1, *labels.shape).to(self.device)

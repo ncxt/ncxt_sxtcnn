@@ -42,6 +42,7 @@ class NCXTPipe:
         fold=3,
         sanitize=True,
         cached_loader = True,
+        ignore_index = False
     ):
 
         self.working_directory = working_directory
@@ -103,7 +104,9 @@ class NCXTPipe:
                 
         if not self._model_args.get("num_classes"):
             self._model_args["num_classes"] = len(self.task) + 1
-        self._criterion_args["ignore_index"] = self._model_args["num_classes"]
+
+        if ignore_index:
+            self._criterion_args["ignore_index"] = self._model_args["num_classes"]
 
         self.fold = fold
 
